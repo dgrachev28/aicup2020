@@ -1,32 +1,28 @@
 #include "EntityAction.hpp"
 
 EntityAction::EntityAction() { }
-EntityAction::EntityAction(std::shared_ptr<MoveAction> moveAction, std::shared_ptr<BuildAction> buildAction, std::shared_ptr<AttackAction> attackAction, std::shared_ptr<RepairAction> repairAction) : moveAction(moveAction), buildAction(buildAction), attackAction(attackAction), repairAction(repairAction) { }
+EntityAction::EntityAction(std::optional<MoveAction> moveAction, std::optional<BuildAction> buildAction, std::optional<AttackAction> attackAction, std::optional<RepairAction> repairAction) : moveAction(moveAction), buildAction(buildAction), attackAction(attackAction), repairAction(repairAction) { }
 EntityAction EntityAction::readFrom(InputStream& stream) {
     EntityAction result;
     if (stream.readBool()) {
-        result.moveAction = std::shared_ptr<MoveAction>(new MoveAction());
-        *result.moveAction = MoveAction::readFrom(stream);
+        result.moveAction = MoveAction::readFrom(stream);
     } else {
-        result.moveAction = std::shared_ptr<MoveAction>();
+        result.moveAction = std::optional<MoveAction>();
     }
     if (stream.readBool()) {
-        result.buildAction = std::shared_ptr<BuildAction>(new BuildAction());
-        *result.buildAction = BuildAction::readFrom(stream);
+        result.buildAction = BuildAction::readFrom(stream);
     } else {
-        result.buildAction = std::shared_ptr<BuildAction>();
+        result.buildAction = std::optional<BuildAction>();
     }
     if (stream.readBool()) {
-        result.attackAction = std::shared_ptr<AttackAction>(new AttackAction());
-        *result.attackAction = AttackAction::readFrom(stream);
+        result.attackAction = AttackAction::readFrom(stream);
     } else {
-        result.attackAction = std::shared_ptr<AttackAction>();
+        result.attackAction = std::optional<AttackAction>();
     }
     if (stream.readBool()) {
-        result.repairAction = std::shared_ptr<RepairAction>(new RepairAction());
-        *result.repairAction = RepairAction::readFrom(stream);
+        result.repairAction = RepairAction::readFrom(stream);
     } else {
-        result.repairAction = std::shared_ptr<RepairAction>();
+        result.repairAction = std::optional<RepairAction>();
     }
     return result;
 }
@@ -56,3 +52,8 @@ void EntityAction::writeTo(OutputStream& stream) const {
         stream.write(false);
     }
 }
+
+EntityAction::EntityAction(const MoveAction &action) : moveAction(action) {}
+EntityAction::EntityAction(const BuildAction &action) : buildAction(action) {}
+EntityAction::EntityAction(const AttackAction &action) : attackAction(action) {}
+EntityAction::EntityAction(const RepairAction &action) : repairAction(action) {}

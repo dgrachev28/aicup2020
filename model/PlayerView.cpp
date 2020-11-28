@@ -61,6 +61,21 @@ PlayerView PlayerView::readFrom(InputStream& stream) {
     for (size_t i = 0; i < result.entities.size(); i++) {
         result.entities[i] = Entity::readFrom(stream);
     }
+
+    for (const auto& player : result.players) {
+        result.playersById[player.id] = player;
+        for (int i = 0; i < 10; ++i) {
+            result.entitiesByPlayerId[player.id][static_cast<EntityType>(i)] = {};
+        }
+    }
+
+    for (const auto& entity : result.entities) {
+        result.entitiesByPlayerId[entity.playerId][entity.entityType].push_back(entity);
+    }
+    for (const auto& entity : result.entities) {
+        result.entitiesById[entity.id] = entity;
+    }
+
     return result;
 }
 void PlayerView::writeTo(OutputStream& stream) const {
@@ -83,4 +98,19 @@ void PlayerView::writeTo(OutputStream& stream) const {
     for (const Entity& entitiesElement : entities) {
         entitiesElement.writeTo(stream);
     }
+}
+
+int PlayerView::getFood() const {
+    int food = 0;
+    for (const Entity& entity : entities) {
+        if (entity.playerId == myId && entity.active) {
+            food += entityProperties.at(entity.entityType).populationProvide;
+            food -= entityProperties.at(entity.entityType).populationUse;
+        }
+    }
+    return food;
+}
+
+const std::vector<Entity>& PlayerView::GetMyEntities(EntityType entityType) const {
+    return entitiesByPlayerId.at(myId).at(entityType);
 }

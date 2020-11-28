@@ -1,7 +1,9 @@
 #include "Action.hpp"
 
+#include <utility>
+
 Action::Action() { }
-Action::Action(std::unordered_map<int, EntityAction> entityActions) : entityActions(entityActions) { }
+Action::Action(std::unordered_map<int, EntityAction> entityActions) : entityActions(std::move(entityActions)) { }
 Action Action::readFrom(InputStream& stream) {
     Action result;
     size_t entityActionsSize = stream.readInt();

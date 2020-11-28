@@ -16,6 +16,8 @@
 #include <unordered_map>
 #include <vector>
 
+using Entities = std::unordered_map<EntityType, std::vector<Entity>>;
+
 class PlayerView {
 public:
     int myId;
@@ -29,6 +31,15 @@ public:
     std::vector<Entity> entities;
     PlayerView();
     PlayerView(int myId, int mapSize, bool fogOfWar, std::unordered_map<EntityType, EntityProperties> entityProperties, int maxTickCount, int maxPathfindNodes, int currentTick, std::vector<Player> players, std::vector<Entity> entities);
+
+    std::unordered_map<int, Player> playersById;
+    std::unordered_map<int, Entities> entitiesByPlayerId;
+    std::unordered_map<int, Entity> entitiesById;
+
+    int getFood() const;
+
+    const std::vector<Entity>& GetMyEntities(EntityType entityType) const;
+
     static PlayerView readFrom(InputStream& stream);
     void writeTo(OutputStream& stream) const;
 };

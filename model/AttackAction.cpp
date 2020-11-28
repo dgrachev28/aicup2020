@@ -1,20 +1,23 @@
 #include "AttackAction.hpp"
 
+#include <utility>
+
 AttackAction::AttackAction() { }
-AttackAction::AttackAction(std::shared_ptr<int> target, std::shared_ptr<AutoAttack> autoAttack) : target(target), autoAttack(autoAttack) { }
+AttackAction::AttackAction(std::optional<int> target, std::optional<AutoAttack> autoAttack) : target(target), autoAttack(std::move(autoAttack)) { }
+AttackAction::AttackAction(std::optional<int> target) : target(target) { }
+AttackAction::AttackAction(const AutoAttack& autoAttack) : autoAttack(autoAttack) { }
+
 AttackAction AttackAction::readFrom(InputStream& stream) {
     AttackAction result;
     if (stream.readBool()) {
-        result.target = std::shared_ptr<int>(new int());
-        *result.target = stream.readInt();
+        result.target = stream.readInt();
     } else {
-        result.target = std::shared_ptr<int>();
+        result.target = std::nullopt;
     }
     if (stream.readBool()) {
-        result.autoAttack = std::shared_ptr<AutoAttack>(new AutoAttack());
-        *result.autoAttack = AutoAttack::readFrom(stream);
+        result.autoAttack = AutoAttack::readFrom(stream);
     } else {
-        result.autoAttack = std::shared_ptr<AutoAttack>();
+        result.autoAttack = std::nullopt;
     }
     return result;
 }

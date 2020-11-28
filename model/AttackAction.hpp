@@ -8,13 +8,16 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <optional>
 
 class AttackAction {
 public:
-    std::shared_ptr<int> target;
-    std::shared_ptr<AutoAttack> autoAttack;
+    std::optional<int> target;
+    std::optional<AutoAttack> autoAttack;
     AttackAction();
-    AttackAction(std::shared_ptr<int> target, std::shared_ptr<AutoAttack> autoAttack);
+    AttackAction(std::optional<int> target, std::optional<AutoAttack> autoAttack);
+    AttackAction(std::optional<int> target);
+    AttackAction(const AutoAttack& autoAttack);
     static AttackAction readFrom(InputStream& stream);
     void writeTo(OutputStream& stream) const;
 };
