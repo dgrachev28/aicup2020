@@ -2,6 +2,7 @@
 #define _MY_STRATEGY_HPP_
 
 #include <set>
+#include <unordered_set>
 #include "DebugInterface.hpp"
 #include "model/Model.hpp"
 
@@ -16,9 +17,29 @@ struct DistId {
     }
 };
 
+enum class BuilderState {
+    FARM,
+    MOVE_TO_FARM,
+    REPAIR,
+    BUILD_HOUSE,
+    MOVE_TO_BUILD_HOUSE
+};
+
+class BuilderMeta {
+public:
+    BuilderState state;
+    std::optional<Vec2Int> target;
+
+    BuilderMeta() {}
+    BuilderMeta(BuilderState state) : state(state), target(std::nullopt) {}
+    BuilderMeta(BuilderState state, std::optional<Vec2Int> target) : state(state), target(target) {}
+};
+
 class MyStrategy {
 public:
     int houseBuilderId = -1;
+
+    std::unordered_map<int, BuilderMeta> builderMeta;
 
     int world[80][80];
 
@@ -42,6 +63,12 @@ private:
             int keyPlayerId,
             int valuePlayerId
     );
+
+    Vec2Int findHousePlace();
+
+    bool isEmptyForHouse(int x, int y);
+
+    BuildAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
 
 };
 
