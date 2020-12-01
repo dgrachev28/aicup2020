@@ -64,9 +64,9 @@ private:
             int valuePlayerId
     );
 
-    Vec2Int findHousePlace();
+    bool checkBuilderUnit(const PlayerView& playerView, int x, int y);
 
-    bool isEmptyForHouse(int x, int y);
+    int isEmptyForHouse(const PlayerView& playerView, int x, int y, int size);
 
     BuildAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
 

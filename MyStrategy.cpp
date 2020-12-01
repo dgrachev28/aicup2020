@@ -69,23 +69,24 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
     }
 
     int buildersCount = playerView.GetMyEntities(BUILDER_UNIT).size();
-    int rangedCount = playerView.GetMyEntities(RANGED_UNIT).size();
 
-    if (playerView.GetMyEntities(BUILDER_BASE).empty() || playerView.GetMyEntities(RANGED_BASE).empty()) {
-        return;
-    }
-    const Entity& builderBase = playerView.GetMyEntities(BUILDER_BASE)[0];
-    const Entity& rangedBase = playerView.GetMyEntities(RANGED_BASE)[0];
-    if (buildersCount < 15) {
-        actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, false);
-    } else if (buildersCount < 80) {
-        if (rangedCount < buildersCount - 12) {
-            actions[rangedBase.id] = createBuildUnitAction(rangedBase, RANGED_UNIT, true);
-        } else {
-            actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, true);
+    if (buildersCount < 40) {
+        for (const Entity& builderBase : playerView.GetMyEntities(BUILDER_BASE)) {
+            actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, false);
         }
     } else {
-        actions[rangedBase.id] = createBuildUnitAction(rangedBase, RANGED_UNIT, true);
+        for (const Entity& rangedBase : playerView.GetMyEntities(RANGED_BASE)) {
+            actions[rangedBase.id] = createBuildUnitAction(rangedBase, RANGED_UNIT, true);
+        }
+        if (buildersCount < 100) {
+            for (const Entity& builderBase : playerView.GetMyEntities(BUILDER_BASE)) {
+                actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, true);
+            }
+        } else {
+            for (const Entity& builderBase : playerView.GetMyEntities(BUILDER_BASE)) {
+                actions[builderBase.id] = EntityAction();
+            }
+        }
     }
 }
 
@@ -102,25 +103,60 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
     }
     const auto& myPlayer = playerView.playersById.at(playerView.myId);
     std::unordered_set<int> houseBuilders;
-    std::vector<Entity> potentialHouseBuilders;
-    if (playerView.getFood() < 5 && myPlayer.resource >= 50) {
-        for (const Entity& unit : units) {
-            bool x_mod = (unit.position.x % 5 == 0 || unit.position.x % 5 == 4);
-            bool y_mod = (unit.position.y % 5 == 0 || unit.position.y % 5 == 4);
-            if ((x_mod && !y_mod) || (!x_mod && y_mod)) {
-                if (isEmptyForHouse(unit.position.x / 5 * 5 + 2, unit.position.y / 5 * 5 + 2)) {
-                    potentialHouseBuilders.emplace_back(unit);
+//    std::vector<Entity> potentialHouseBuilders;
+
+    std::vector<std::pair<int, Vec2Int>> potentialHouseBuilders;
+    EntityType buildType = HOUSE;
+
+    if (myPlayer.resource >= 600) {
+        std::vector<Vec2Int> basePositions;
+        for (int i = 7; i < 60; i += 5) {
+            for (int j = 7; j < 60; j += 5) {
+                if (i + j <= 34) {
+                    continue;
+                }
+                basePositions.emplace_back(i, j);
+            }
+        }
+        for (const auto& position : basePositions) {
+            int unitId = isEmptyForHouse(playerView, position.x, position.y, 2);
+            if (unitId != -1) {
+                potentialHouseBuilders.push_back({unitId, {position.x - 1, position.y - 1}});
+                buildType = RANGED_BASE;
+            }
+        }
+    }
+    if (potentialHouseBuilders.empty()) {
+        if (playerView.getFood() < 5 && myPlayer.resource >= 50) {
+            std::vector<Vec2Int> housePositions;
+            for (int i = 1; i < 60; i += 3) {
+                housePositions.emplace_back(i, 1);
+            }
+            for (int i = 5; i < 60; i += 3) {
+                housePositions.emplace_back(1, i);
+            }
+            for (int i = 7; i < 60; i += 5) {
+                for (int j = 7; j < 60; j += 5) {
+                    housePositions.emplace_back(i, j);
+                }
+            }
+
+            for (const auto &housePosition : housePositions) {
+                int unitId = isEmptyForHouse(playerView, housePosition.x, housePosition.y, 1);
+                if (unitId != -1) {
+                    potentialHouseBuilders.push_back({unitId, {housePosition.x - 1, housePosition.y - 1}});
                 }
             }
         }
     }
+
     if (!potentialHouseBuilders.empty()) {
-        std::sort(potentialHouseBuilders.begin(), potentialHouseBuilders.end(), [] (const Entity& unit1, const Entity& unit2) {
-            return unit1.position.x + unit1.position.y < unit2.position.x + unit2.position.y;
+        std::sort(potentialHouseBuilders.begin(), potentialHouseBuilders.end(), [] (const std::pair<int, Vec2Int>& unit1, const std::pair<int, Vec2Int>& unit2) {
+            return unit1.second.x + unit1.second.y < unit2.second.x + unit2.second.y;
         });
         const auto& unit = potentialHouseBuilders[0];
-        houseBuilders.insert(unit.id);
-        actions[unit.id] = BuildAction(HOUSE, {unit.position.x / 5 * 5 + 1, unit.position.y / 5 * 5 + 1});
+        houseBuilders.insert(unit.first);
+        actions[unit.first] = BuildAction(buildType, {unit.second.x, unit.second.y});
     }
 
     for (const Entity& unit : units) {
@@ -197,10 +233,9 @@ void MyStrategy::getWarriorActions(const PlayerView& playerView, Actions& action
         return;
     }
 
-    const auto& units = playerView.GetMyEntities(RANGED_UNIT);
+    const auto& rangedUnits = playerView.GetMyEntities(RANGED_UNIT);
     const auto& meleeUnits = playerView.GetMyEntities(MELEE_UNIT);
-    int rangedCount = units.size();
-    for (const Entity& unit : units) {
+    for (const Entity& unit : rangedUnits) {
         if (myToEnemyMapping[unit.id].empty()) {
             continue;
         }
@@ -209,20 +244,38 @@ void MyStrategy::getWarriorActions(const PlayerView& playerView, Actions& action
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (rangedCount > 30) {
+        if (rangedUnits.size() + meleeUnits.size() > 20) {
             targetPosition = playerView.entitiesById.at(minEnemyId).position;
         }
         if (minEnemyDist < 20) {
-            actions[unit.id] = AttackAction({20, {
+            actions[unit.id] = AttackAction({1000, {
                 WALL, HOUSE, BUILDER_BASE, BUILDER_UNIT, MELEE_BASE,
                 MELEE_UNIT, RANGED_BASE, RANGED_UNIT, TURRET
             }});
             continue;
         }
-        actions[unit.id] = MoveAction(targetPosition, false, false);
+        actions[unit.id] = MoveAction(targetPosition, true, true);
     }
     for (const Entity& unit : meleeUnits) {
-        actions[unit.id] = MoveAction({0, 0}, false, false);
+        if (myToEnemyMapping[unit.id].empty()) {
+            continue;
+        }
+        int minEnemyDist = myToEnemyMapping[unit.id].begin()->distance;
+        int minEnemyId = myToEnemyMapping[unit.id].begin()->entityId;
+//        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
+//                  << "), distance: " << minEnemyDist << std::endl;
+        Vec2Int targetPosition = {19, 19};
+        if (rangedUnits.size() + meleeUnits.size() > 20) {
+            targetPosition = playerView.entitiesById.at(minEnemyId).position;
+        }
+        if (minEnemyDist < 20) {
+            actions[unit.id] = AttackAction({1000, {
+                    WALL, HOUSE, BUILDER_BASE, BUILDER_UNIT, MELEE_BASE,
+                    MELEE_UNIT, RANGED_BASE, RANGED_UNIT, TURRET
+            }});
+            continue;
+        }
+        actions[unit.id] = MoveAction(targetPosition, true, false);
     }
 }
 
@@ -246,32 +299,47 @@ std::unordered_map<int, std::set<DistId>> MyStrategy::calculateDistances(
     return result;
 }
 
-Vec2Int MyStrategy::findHousePlace() {
-    int x = 2;
-    int y = 2;
-    while (true) {
-        if (isEmptyForHouse(x, y)) {
-            return {x, y};
-        }
-        if (x == 2) {
-            x = y + 5;
-            y = 2;
-        } else {
-            x -= 5;
-            y += 5;
-        }
-    }
+bool MyStrategy::checkBuilderUnit(const PlayerView& playerView, int x, int y) {
+    return world[x][y] != -1 && playerView.entitiesById.at(world[x][y]).entityType == BUILDER_UNIT
+           && playerView.entitiesById.at(world[x][y]).playerId == playerView.myId;
 }
 
-bool MyStrategy::isEmptyForHouse(int x, int y) {
-    for (int i = x - 1; i < x + 1; ++i) {
-        for (int j = y - 1; j < y + 1; ++j) {
+int MyStrategy::isEmptyForHouse(const PlayerView& playerView, int x, int y, int size) {
+    int unitSize = size + 1;
+    for (int i = x - size; i <= x + size; ++i) {
+        for (int j = y - size; j <= y + size; ++j) {
             if (world[i][j] != -1) {
-                return false;
+                return -1;
             }
         }
     }
-    return true;
+    if (size == 2) {
+        std::vector<int> neighbours{world[x + 5][y + 5], world[x + 5][y - 5], world[x - 5][y + 5], world[x - 5][y - 5]};
+        for (int n : neighbours) {
+            if (n != -1 && playerView.entitiesById.at(n).entityType == RANGED_BASE) {
+                return -1;
+            }
+        }
+    }
+
+    for (int i = x - size; i <= x + size; ++i) {
+        if (y >= unitSize && checkBuilderUnit(playerView, i, y - unitSize)) {
+            return world[i][y - unitSize];
+        }
+        if (y <= 79 - unitSize && checkBuilderUnit(playerView, i, y + unitSize)) {
+            return world[i][y + unitSize];
+        }
+    }
+
+    for (int i = y - size; i <= y + size; ++i) {
+        if (x >= unitSize && checkBuilderUnit(playerView, x - unitSize, i)) {
+            return world[x - unitSize][i];
+        }
+        if (x <= 79 - unitSize && checkBuilderUnit(playerView, x + unitSize, i)) {
+            return world[x + unitSize][i];
+        }
+    }
+    return -1;
 }
 
 BuildAction MyStrategy::createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive) {
