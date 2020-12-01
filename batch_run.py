@@ -67,7 +67,7 @@ def worker(args):
 
     try:
         with subprocess.Popen(f"{lr_bin} --config {config_path} --save-results {result_path} --log-level warn".split(" ")) as process:
-            time.sleep(0.5)
+            time.sleep(1.0)
             subprocess.Popen([p1, "127.0.0.1", str(port1), "0000000000000000"], stdout=subprocess.DEVNULL)
             subprocess.Popen([p2, "127.0.0.1", str(port2), "0000000000000000"], stdout=subprocess.DEVNULL)
             subprocess.Popen([p2, "127.0.0.1", str(port3), "0000000000000000"], stdout=subprocess.DEVNULL)

@@ -215,7 +215,7 @@ void MyStrategy::getWarriorActions(const PlayerView& playerView, Actions& action
         if (minEnemyDist < 20) {
             actions[unit.id] = AttackAction({20, {
                 WALL, HOUSE, BUILDER_BASE, BUILDER_UNIT, MELEE_BASE,
-                MELEE_UNIT, RANGED_BASE, RANGED_UNIT, RESOURCE, TURRET
+                MELEE_UNIT, RANGED_BASE, RANGED_UNIT, TURRET
             }});
             continue;
         }
