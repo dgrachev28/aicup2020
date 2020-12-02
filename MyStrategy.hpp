@@ -40,6 +40,8 @@ public:
     int houseBuilderId = -1;
 
     std::unordered_map<int, BuilderMeta> builderMeta;
+    int edgeHousesShiftX;
+    int edgeHousesShiftY;
 
     int world[80][80];
 

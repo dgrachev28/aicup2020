@@ -3,6 +3,31 @@
 #include <iostream>
 #include <cstdlib>
 #include <algorithm>
+#include <queue>
+
+
+//std::vector<int> bfs(int s) {
+//    // длина любого кратчайшего пути не превосходит n - 1,
+//    // поэтому n - достаточное значение для "бесконечности";
+//    // после работы алгоритма dist[v] = n, если v недостижима из s
+//    std::vector<int> dist(1000, 1000);
+//    dist[s] = 0;
+//    std::queue<int> q;
+//    q.push(s);
+//
+//    while (!q.empty()) {
+//        int v = q.front();
+//        q.pop();
+//        for (int u : adj[v]) {
+//            if (dist[u] > dist[v] + 1) {
+//                dist[u] = dist[v] + 1;
+//                q.push(u);
+//            }
+//        }
+//    }
+//
+//    return dist;
+//}
 
 
 int dist(const Entity& e1, const Entity& e2) {
@@ -69,16 +94,39 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
     }
 
     int buildersCount = playerView.GetMyEntities(BUILDER_UNIT).size();
-
-    if (buildersCount < 40) {
+    int enemiesCount = 0;
+    int resourcesCount = 0;
+    for (const auto& entity : playerView.entities) {
+        if ((entity.entityType == MELEE_UNIT || entity.entityType == RANGED_UNIT) && entity.playerId != playerView.myId) {
+            enemiesCount += 1;
+        } else if (entity.entityType == RESOURCE) {
+            resourcesCount += 1;
+        }
+    }
+    float economicFactor = static_cast<float>(resourcesCount) / (static_cast<float>(enemiesCount) + 0.0001f);
+    std::cerr << "currentTick: " << playerView.currentTick << "economicFactor: " << economicFactor << std::endl;
+    if (economicFactor > 10.0 && buildersCount < 40) {
         for (const Entity& builderBase : playerView.GetMyEntities(BUILDER_BASE)) {
-            actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, false);
+            actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, buildersCount > 10);
         }
     } else {
+        int maxBuildersCount;
+        if (economicFactor > 5.0) {
+            maxBuildersCount = 80;
+//        } else if (economicFactor > 3.0) {
+//            maxBuildersCount = 60;
+        } else if (economicFactor > 2.0) {
+            maxBuildersCount = 60;
+        } else if (economicFactor > 0.5) {
+            maxBuildersCount = 20;
+        } else if (economicFactor > 0.1) {
+            maxBuildersCount = 5;
+        }
+
         for (const Entity& rangedBase : playerView.GetMyEntities(RANGED_BASE)) {
             actions[rangedBase.id] = createBuildUnitAction(rangedBase, RANGED_UNIT, true);
         }
-        if (buildersCount < 100) {
+        if (buildersCount < maxBuildersCount) {
             for (const Entity& builderBase : playerView.GetMyEntities(BUILDER_BASE)) {
                 actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, true);
             }
@@ -108,10 +156,12 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
     std::vector<std::pair<int, Vec2Int>> potentialHouseBuilders;
     EntityType buildType = HOUSE;
 
-    if (myPlayer.resource >= 600) {
+    if ((myPlayer.resource >= 600 && playerView.GetMyEntities(RANGED_BASE).size() < 2)
+            || (myPlayer.resource >= 1500 && playerView.GetMyEntities(RANGED_BASE).size() < 3)
+            || myPlayer.resource >= 6000 && playerView.GetMyEntities(RANGED_BASE).size() < 4) {
         std::vector<Vec2Int> basePositions;
-        for (int i = 7; i < 60; i += 5) {
-            for (int j = 7; j < 60; j += 5) {
+        for (int i = 5; i < 60; i += 1) {
+            for (int j = 5; j < 60; j += 1) {
                 if (i + j <= 34) {
                     continue;
                 }
@@ -121,7 +171,7 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
         for (const auto& position : basePositions) {
             int unitId = isEmptyForHouse(playerView, position.x, position.y, 2);
             if (unitId != -1) {
-                potentialHouseBuilders.push_back({unitId, {position.x - 1, position.y - 1}});
+                potentialHouseBuilders.push_back({unitId, {position.x - 2, position.y - 2}});
                 buildType = RANGED_BASE;
             }
         }
@@ -129,14 +179,26 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
     if (potentialHouseBuilders.empty()) {
         if (playerView.getFood() < 5 && myPlayer.resource >= 50) {
             std::vector<Vec2Int> housePositions;
-            for (int i = 1; i < 60; i += 3) {
-                housePositions.emplace_back(i, 1);
-            }
-            for (int i = 5; i < 60; i += 3) {
-                housePositions.emplace_back(1, i);
+            if (playerView.GetMyEntities(HOUSE).empty()) {
+                for (int i = 1; i < 60; ++i) {
+                    housePositions.emplace_back(i, 1);
+                    housePositions.emplace_back(1, i);
+                }
+            } else {
+                housePositions.emplace_back(1, 1);
+                for (int i = edgeHousesShiftX + 3; i < 60; i += 3) {
+                    housePositions.emplace_back(i, 1);
+                }
+                for (int i = edgeHousesShiftY + 3; i < 60; i += 3) {
+                    housePositions.emplace_back(1, i);
+                }
             }
             for (int i = 7; i < 60; i += 5) {
-                for (int j = 7; j < 60; j += 5) {
+                housePositions.emplace_back(i, 6);
+                housePositions.emplace_back(6, i);
+            }
+            for (int i = 12; i < 60; i += 5) {
+                for (int j = 12; j < 60; j += 5) {
                     housePositions.emplace_back(i, j);
                 }
             }
@@ -155,6 +217,21 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
             return unit1.second.x + unit1.second.y < unit2.second.x + unit2.second.y;
         });
         const auto& unit = potentialHouseBuilders[0];
+        if (playerView.GetMyEntities(HOUSE).empty()) {
+            if (unit.second.x == 0 && unit.second.y == 0) {
+                edgeHousesShiftX = 1;
+                edgeHousesShiftY = 1;
+            }
+            if (unit.second.x == 0) {
+                edgeHousesShiftX = unit.second.y % 3 == 0 ? 2 : 1;
+                edgeHousesShiftY = unit.second.y % 3 + 1;
+            }
+            if (unit.second.y == 0) {
+                edgeHousesShiftX = unit.second.x % 3 + 1;
+                edgeHousesShiftY = unit.second.x % 3 == 0 ? 2 : 1;
+            }
+        }
+
         houseBuilders.insert(unit.first);
         actions[unit.first] = BuildAction(buildType, {unit.second.x, unit.second.y});
     }
@@ -317,6 +394,16 @@ int MyStrategy::isEmptyForHouse(const PlayerView& playerView, int x, int y, int 
         std::vector<int> neighbours{world[x + 5][y + 5], world[x + 5][y - 5], world[x - 5][y + 5], world[x - 5][y - 5]};
         for (int n : neighbours) {
             if (n != -1 && playerView.entitiesById.at(n).entityType == RANGED_BASE) {
+                return -1;
+            }
+        }
+    }
+
+    for (int i = x - (size + 2); i <= x + (size + 2); ++i) {
+        for (int j = y - (size + 2); j <= y + (size + 2); ++j) {
+            if (i >= 0 && j >= 0 && i <= 79 && j <= 79 && world[i][j] != -1
+                    && playerView.entitiesById.at(world[i][j]).entityType == RANGED_UNIT
+                    && playerView.entitiesById.at(world[i][j]).playerId != playerView.myId) {
                 return -1;
             }
         }
