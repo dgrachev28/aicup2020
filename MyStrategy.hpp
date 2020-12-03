@@ -17,6 +17,17 @@ struct DistId {
     }
 };
 
+struct PotentialCell {
+    float score;
+    int x;
+    int y;
+
+    bool operator<(const PotentialCell& other) const {
+        return score < other.score;
+    }
+};
+
+
 enum class BuilderState {
     FARM,
     MOVE_TO_FARM,
@@ -37,6 +48,8 @@ public:
 
 class MyStrategy {
 public:
+    const PlayerView* playerView;
+
     int houseBuilderId = -1;
 
     std::unordered_map<int, BuilderMeta> builderMeta;
@@ -49,6 +62,8 @@ public:
     std::unordered_map<int, std::set<DistId>> myToEnemyMapping;
     std::unordered_map<int, std::set<DistId>> enemyToMyMapping;
     std::unordered_map<int, std::set<DistId>> enemyToEnemyMapping;
+
+//    std::unordered_map<int, std::set<DistId>> entitiesMapping;
 
     MyStrategy();
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
@@ -72,6 +87,21 @@ private:
 
     BuildAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
 
+
+    // Ranged units actions
+    void getRangedUnitAction(const PlayerView& playerView, Actions& actions);
+
+    float potentialField[80][80];
+    std::vector<PotentialCell> topPotentials;
+
+    void findTargetEnemies(const PlayerView& playerView);
+    void createPotentialField(const PlayerView& playerView);
+    void fillPotential(int x, int y, float score);
+
+    // End of Ranged units actions
+
+
+    Vec2Int getWarriorTargetPosition(const Entity &unit);
 };
 
 #endif
