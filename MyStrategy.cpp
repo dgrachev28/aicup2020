@@ -498,7 +498,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (armySize > 4 || minEnemyDist > 20) {
+        if (armySize > 4 || minEnemyDist < 20) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
@@ -535,7 +535,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (armySize > 4 || minEnemyDist > 20) {
+        if (armySize > 4 || minEnemyDist < 20) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
