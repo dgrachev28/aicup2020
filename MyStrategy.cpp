@@ -217,6 +217,13 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
             }
         }
     }
+    for (const Entity& turret : playerView.GetMyEntities(TURRET)) {
+        actions[turret.id] = AttackAction({1000, {
+                WALL, HOUSE, BUILDER_BASE, BUILDER_UNIT, MELEE_BASE,
+                MELEE_UNIT, RANGED_BASE, RANGED_UNIT, TURRET
+        }});
+    }
+
 }
 
 void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions) {
@@ -344,38 +351,28 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
         }
 
 //        const BuilderMeta& meta = builderMeta.at(unit.id);
-
-        if (unit.position.x != 79 && brokenBuildings.count(world[unit.position.x + 1][unit.position.y])) {
-//            builderMeta[unit.id] = BuilderMeta(BuilderState::REPAIR);
-            actions[unit.id] = RepairAction(world[unit.position.x + 1][unit.position.y]);
+        const auto& edges = getEdges(unit.position);
+        bool shouldRepair = false;
+        for (const auto& edge : edges) {
+            if (brokenBuildings.count(world[edge.x][edge.y])) {
+                actions[unit.id] = RepairAction(world[edge.x][edge.y]);
+                shouldRepair = true;
+                break;
+            } else if (world[edge.x][edge.y] == -1) {
+                const auto& edgesOfEdge = getEdges(edge);
+                for (const auto& e : edgesOfEdge) {
+                    if (brokenBuildings.count(world[e.x][e.y])) {
+                        actions[unit.id] = MoveAction({edge.x, edge.y}, false, false);
+                        shouldRepair = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (shouldRepair) {
             continue;
         }
-        if (unit.position.x != 0 && brokenBuildings.count(world[unit.position.x - 1][unit.position.y])) {
-//            builderMeta[unit.id] = BuilderMeta(BuilderState::REPAIR);
-            actions[unit.id] = RepairAction(world[unit.position.x - 1][unit.position.y]);
-            continue;
-        }
-        if (unit.position.y != 79 && brokenBuildings.count(world[unit.position.x][unit.position.y + 1])) {
-//            builderMeta[unit.id] = BuilderMeta(BuilderState::REPAIR);
-            actions[unit.id] = RepairAction(world[unit.position.x][unit.position.y + 1]);
-            continue;
-        }
-        if (unit.position.y != 0 && brokenBuildings.count(world[unit.position.x][unit.position.y - 1])) {
-//            builderMeta[unit.id] = BuilderMeta(BuilderState::REPAIR);
-            actions[unit.id] = RepairAction(world[unit.position.x][unit.position.y - 1]);
-            continue;
-        }
-
-//        if (meta.state == BuilderState::FARM) {
-//            actions[unit.id] = AttackAction({1000, {RESOURCE}});
-//        } else if (meta.state == BuilderState::MOVE_TO_FARM) {
-//            if (unit.position == *meta.target) {
-//                builderMeta[unit.id] = BuilderMeta(BuilderState::FARM);
-//                actions[unit.id] = AttackAction({1000, {RESOURCE}});
-//            }
-//        } else if (meta.state == BuilderState::REPAIR) {
-            actions[unit.id] = AttackAction({1000, {RESOURCE}});
-//        }
+        actions[unit.id] = AttackAction({1000, {RESOURCE}});
     }
 }
 
@@ -501,7 +498,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (armySize > 4) {
+        if (armySize > 4 || minEnemyDist > 20) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
@@ -538,7 +535,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (armySize > 4) {
+        if (armySize > 4 || minEnemyDist > 20) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
@@ -571,18 +568,31 @@ Vec2Int MyStrategy::getWarriorTargetPosition(const Entity &unit) {
     Vec2Int targetPosition;
     PotentialCell bestCell{0.0, 0, 0};
     float bestScore = -1000.0;
+    float bestPotentialScore = 1000.0;
     for (int i = 0; i < 50; ++i) {
         if (topPotentials.size() == i) {
             break;
         }
-        float distScore = 1.0 - dist(unit.position, {topPotentials[i].x, topPotentials[i].y}) / 100.0;
+        int distance = dist(unit.position, {topPotentials[i].x, topPotentials[i].y});
+        float distScore;
+        if (distance > 100) {
+            distScore = 1.0 - dist(unit.position, {topPotentials[i].x, topPotentials[i].y}) / 150.0;
+        } else {
+            distScore = 1.0 - dist(unit.position, {topPotentials[i].x, topPotentials[i].y}) / 100.0;
+        }
+
         float cellScore = (50 - topPotentials[i].score) * distScore;
         if (cellScore > bestScore) {
             bestCell = topPotentials[i];
             bestScore = cellScore;
+            bestPotentialScore = topPotentials[i].score;
         }
     }
-    targetPosition = {bestCell.x, bestCell.y};
+    if (bestPotentialScore < 30.0 || playerView->currentTick > 500) {
+        targetPosition = {bestCell.x, bestCell.y};
+    } else {
+        targetPosition = {19, 19};
+    }
     return targetPosition;
 }
 
