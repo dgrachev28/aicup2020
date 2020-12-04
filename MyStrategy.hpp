@@ -27,7 +27,6 @@ struct PotentialCell {
     }
 };
 
-
 enum class BuilderState {
     FARM,
     MOVE_TO_FARM,
@@ -68,6 +67,8 @@ public:
     MyStrategy();
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
+
+    std::vector<std::vector<int>> dijkstra(int x, int y);
 
 private:
     void getBuildUnitActions(const PlayerView& playerView, Actions& actions);

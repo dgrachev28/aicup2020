@@ -12,7 +12,8 @@ public:
     Vec2Int(int x, int y);
     static Vec2Int readFrom(InputStream& stream);
     void writeTo(OutputStream& stream) const;
-    bool operator ==(const Vec2Int& other) const;
+    bool operator==(const Vec2Int& other) const;
+    bool operator<(const Vec2Int& other) const;
 };
 namespace std {
     template<>

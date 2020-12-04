@@ -12,8 +12,17 @@ void Vec2Int::writeTo(OutputStream& stream) const {
     stream.write(x);
     stream.write(y);
 }
-bool Vec2Int::operator ==(const Vec2Int& other) const {
+bool Vec2Int::operator==(const Vec2Int& other) const {
     return x == other.x && y == other.y;
+}
+bool Vec2Int::operator<(const Vec2Int& other) const {
+    if (x < other.x) {
+        return true;
+    }
+    if (x > other.x) {
+        return false;
+    }
+    return y < other.y;
 }
 size_t std::hash<Vec2Int>::operator ()(const Vec2Int& value) const {
     size_t result = 0;
