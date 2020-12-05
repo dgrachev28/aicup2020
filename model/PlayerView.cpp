@@ -111,6 +111,16 @@ int PlayerView::getFood() const {
     return food;
 }
 
+int PlayerView::getInactiveHousesCount() const {
+    int inactiveHousesCount = 0;
+    for (const Entity& entity : GetMyEntities(HOUSE)) {
+        if (!entity.active) {
+            ++inactiveHousesCount;
+        }
+    }
+    return inactiveHousesCount;
+}
+
 const std::vector<Entity>& PlayerView::GetMyEntities(EntityType entityType) const {
     return entitiesByPlayerId.at(myId).at(entityType);
 }

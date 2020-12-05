@@ -38,6 +38,8 @@ public:
 
     int getFood() const;
 
+    int getInactiveHousesCount() const;
+
     const std::vector<Entity>& GetMyEntities(EntityType entityType) const;
 
     static PlayerView readFrom(InputStream& stream);

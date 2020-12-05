@@ -5,8 +5,25 @@
 #include <unordered_set>
 #include "DebugInterface.hpp"
 #include "model/Model.hpp"
+#include <ostream>
 
 using Actions = std::unordered_map<int, EntityAction>;
+
+struct Score {
+    float myBuildingScore;
+    float myBuilderScore;
+    float myPowerScore;
+    float enemyPowerScore;
+    float powerScore = 0.0f;
+    float score = 0.0f;
+
+    void calcScore();
+
+    bool operator<(const Score& other) const {
+        return score < other.score;
+    }
+    friend std::ostream& operator<<(std::ostream& out, const Score& score);
+};
 
 struct DistId {
     int distance;
@@ -18,13 +35,15 @@ struct DistId {
 };
 
 struct PotentialCell {
-    float score;
+    Score score;
     int x;
     int y;
 
     bool operator<(const PotentialCell& other) const {
-        return score < other.score;
+        return score.score < other.score.score;
     }
+
+    friend std::ostream& operator<<(std::ostream& out, const PotentialCell& potentialCell);
 };
 
 enum class BuilderState {
@@ -63,6 +82,8 @@ public:
     std::unordered_map<int, std::set<DistId>> enemyToEnemyMapping;
 
 //    std::unordered_map<int, std::set<DistId>> entitiesMapping;
+
+    std::unordered_map<int, Vec2Int> lastTargetPositions;
 
     MyStrategy();
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);

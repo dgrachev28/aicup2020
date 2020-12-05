@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <queue>
+#include <cmath>
 
 
 //std::vector<int> bfs(int s) {
@@ -28,6 +29,34 @@
 //
 //    return dist;
 //}
+
+float customDecay(float value) {
+    float a = 50;
+    float b = 5;
+    float maxValue = 150;
+    if (value > maxValue) {
+        return 0.0;
+    }
+    if (value < a - b) {
+        return a - value;
+    }
+    float x1 = b - a;
+    return (value - maxValue) * b / (x1 - maxValue);
+}
+
+float powDecay(int distance, float a = 0.2f) {
+    if (distance == 0) {
+        return 1.0f;
+    }
+    return 1.0f / std::pow(distance, a);
+}
+
+float linearDecay(int distance, int maxDistance) {
+    if (distance > maxDistance) {
+        return 0.0f;
+    }
+    return 1.0f - static_cast<float>(distance) / static_cast<float>(maxDistance);
+}
 
 std::vector<Vec2Int> getEdges(const Vec2Int& v) {
     std::vector<Vec2Int> edges;
@@ -129,7 +158,7 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
 //    myToMyMapping = calculateDistances(playerView, playerView.myId, playerView.myId);
     myToEnemyMapping = calculateDistances(playerView, playerView.myId, anyEnemyId);
     enemyToMyMapping = calculateDistances(playerView, anyEnemyId, playerView.myId);
-//    enemyToEnemyMapping = calculateDistances(playerView, anyEnemyId, anyEnemyId);
+    enemyToEnemyMapping = calculateDistances(playerView, anyEnemyId, anyEnemyId);
 
     std::unordered_map<int, EntityAction> actions;
 
@@ -149,9 +178,6 @@ void MyStrategy::debugUpdate(const PlayerView& playerView, DebugInterface& debug
 
 void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& actions) {
     const auto& myPlayer = playerView.playersById.at(playerView.myId);
-    if (myPlayer.resource < 10 || playerView.getFood() == 0) {
-        return;
-    }
 
     int buildersCount = playerView.GetMyEntities(BUILDER_UNIT).size();
     int rangedCount = playerView.GetMyEntities(RANGED_UNIT).size();
@@ -184,11 +210,18 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
         } else if (economicFactor > 0.1) {
             maxBuildersCount = 5;
         }
-//        if (playerView.playersById.at(playerView.myId).resource < 500) {
-//            maxRangedCount = 30;
-//        }
+        int maxRangedCount;
+        if (playerView.playersById.at(playerView.myId).resource < 500) {
+            maxRangedCount = 30;
+        } else if (playerView.playersById.at(playerView.myId).resource < 2000) {
+            maxRangedCount = 40;
+        } else if (playerView.playersById.at(playerView.myId).resource < 5000) {
+            maxRangedCount = 50;
+        } else {
+            maxRangedCount = 60;
+        }
 
-        if (rangedCount < 40) {
+        if (rangedCount < maxRangedCount) {
             for (const Entity& rangedBase : playerView.GetMyEntities(RANGED_BASE)) {
                 actions[rangedBase.id] = createBuildUnitAction(rangedBase, RANGED_UNIT, true);
             }
@@ -265,7 +298,7 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
 //        }
 //    }
     if (potentialHouseBuilders.empty()) {
-        if (playerView.getFood() < 5 && myPlayer.resource >= 50) {
+        if (playerView.getFood() < 10 && myPlayer.resource >= 50 && playerView.getInactiveHousesCount() < 3) {
             std::vector<Vec2Int> housePositions;
             if (playerView.GetMyEntities(HOUSE).empty()) {
                 for (int i = 1; i < 60; ++i) {
@@ -388,8 +421,20 @@ std::unordered_map<int, std::set<DistId>> MyStrategy::calculateDistances(
         }
         result[keyEntity.id] = {};
         for (const Entity& valueEntity : playerView.entities) {
-            if (eqPlayerTeam(valueEntity.playerId, valuePlayerId, playerView)) {
-                result[keyEntity.id].insert({dist(keyEntity, valueEntity), valueEntity.id});
+            if (eqPlayerTeam(valueEntity.playerId, valuePlayerId, playerView) && keyEntity.id != valueEntity.id) {
+                int entitySize = playerView.entityProperties.at(valueEntity.entityType).size;
+                int distance;
+                if (entitySize > 1) {
+                    distance = std::min({
+                         dist(keyEntity.position, valueEntity.position),
+                         dist(keyEntity.position, {valueEntity.position.x, valueEntity.position.y + entitySize}),
+                         dist(keyEntity.position, {valueEntity.position.x + entitySize, valueEntity.position.y}),
+                         dist(keyEntity.position, {valueEntity.position.x + entitySize, valueEntity.position.y + entitySize})
+                    });
+                } else {
+                    distance = dist(keyEntity, valueEntity);
+                };
+                result[keyEntity.id].insert({distance, valueEntity.id});
             }
         }
     }
@@ -498,7 +543,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (armySize > 4 || minEnemyDist < 20) {
+        if (playerView.currentTick > 100 || minEnemyDist < 20) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
@@ -535,7 +580,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (armySize > 4 || minEnemyDist < 20) {
+        if (playerView.currentTick > 100 || minEnemyDist < 20) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
@@ -574,55 +619,83 @@ Vec2Int MyStrategy::getWarriorTargetPosition(const Entity &unit) {
             break;
         }
         int distance = dist(unit.position, {topPotentials[i].x, topPotentials[i].y});
-        float distScore;
-        if (distance > 100) {
-            distScore = 1.0 - dist(unit.position, {topPotentials[i].x, topPotentials[i].y}) / 150.0;
-        } else {
-            distScore = 1.0 - dist(unit.position, {topPotentials[i].x, topPotentials[i].y}) / 100.0;
+        float distScore = powDecay(distance, 0.4);
+        float inertion = 1.0f;
+        if (lastTargetPositions.count(unit.id)) {
+            inertion = powDecay(dist(lastTargetPositions.at(unit.id), {topPotentials[i].x, topPotentials[i].y}), 0.2);
         }
 
-        float cellScore = (50 - topPotentials[i].score) * distScore;
+        float cellScore = topPotentials[i].score.score * distScore * inertion;
         if (cellScore > bestScore) {
             bestCell = topPotentials[i];
             bestScore = cellScore;
-            bestPotentialScore = topPotentials[i].score;
+            bestPotentialScore = topPotentials[i].score.score;
         }
     }
-    if (bestPotentialScore < 30.0 || playerView->currentTick > 500) {
+//    if (bestPotentialScore < 30.0 || playerView->currentTick > 500) {
         targetPosition = {bestCell.x, bestCell.y};
-    } else {
-        targetPosition = {19, 19};
-    }
+//    } else {
+//        targetPosition = {19, 19};
+//    }
+    lastTargetPositions[unit.id] = targetPosition;
     return targetPosition;
 }
 
 
 void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
-    static std::unordered_map<EntityType, float> unitScore = {{RANGED_UNIT, 1.0}, {MELEE_UNIT, 0.5}};
-    const int kLargestDistance = 30;
-    // TODO: change loop header
+    static std::unordered_map<EntityType, float> unitScore = {{RANGED_UNIT, 1.0}, {MELEE_UNIT, 0.6}};
+    const int kLargestDistance = 40;
 
     std::vector<PotentialCell> potentials;
     for (const auto& enemy : playerView.entities) {
         if (enemy.playerId != playerView.myId && (enemy.entityType == RANGED_UNIT || enemy.entityType == MELEE_UNIT)) {
             int i = 0;
-            float avgDist = 0.0;
+            float avgBuilderDist = 0.0;
+            int buildingDist = 0;
+            float myPowerScore = 0.0;
+            float enemyPowerScore = 0.0;
             for (const DistId& distId : enemyToMyMapping[enemy.id]) {
                 const Entity& unit = playerView.entitiesById.at(distId.entityId);
-                if (unit.entityType == BUILDER_UNIT || unit.entityType == HOUSE) {
-                    avgDist += dist(enemy, unit);
-                    ++i;
-                    if (i >= 10) {
-                        break;
+                const auto& distance = dist(enemy, unit);
+                if (unit.entityType == BUILDER_UNIT) {
+                    if (i < 5) {
+                        avgBuilderDist += distance;
+                        ++i;
                     }
                 }
+                if ((unit.entityType == HOUSE || unit.entityType == RANGED_BASE || unit.entityType == MELEE_BASE) && buildingDist == 0) {
+                    int entitySize = playerView.entityProperties.at(unit.entityType).size / 2;
+                    buildingDist = dist(enemy.position, {unit.position.x + entitySize, unit.position.y + entitySize});
+                }
+                if ((unit.entityType == RANGED_UNIT || unit.entityType == MELEE_UNIT) && distance < 10) {
+                    myPowerScore += unitScore[unit.entityType] * linearDecay(distance, 15);
+                }
             }
-            avgDist /= (i + 0.0001f);
-            potentials.push_back({avgDist, enemy.position.x, enemy.position.y});
+
+            for (const DistId& distId : enemyToEnemyMapping[enemy.id]) {
+                const Entity& unit = playerView.entitiesById.at(distId.entityId);
+                const auto& distance = dist(enemy, unit);
+                if (distance >= 10) {
+                    break;
+                }
+                if (unit.entityType == RANGED_UNIT || unit.entityType == MELEE_UNIT) {
+                    enemyPowerScore += unitScore[unit.entityType] * linearDecay(distance, 15);
+                }
+            }
+            if (i > 0) {
+                avgBuilderDist /= static_cast<float>(i);
+            }
+            float myBuildingScore = customDecay(buildingDist);
+            float myBuilderScore = customDecay(avgBuilderDist);
+
+            Score score{myBuildingScore, myBuilderScore, myPowerScore, enemyPowerScore};
+            score.calcScore();
+            potentials.push_back({score, enemy.position.x, enemy.position.y});
         }
     }
 
     std::sort(potentials.begin(), potentials.end());
+    std::reverse(potentials.begin(), potentials.end());
     topPotentials.clear();
     for (const auto& p : potentials) {
         bool isTooClose = false;
@@ -639,10 +712,12 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
             break;
         }
     }
-//    std::reverse(topPotentials.begin(), topPotentials.end());
-
-//    std::cerr << "tick: " << playerView.currentTick << ", score: " << topPotentials[0].score << ", x: "
-//              << topPotentials[0].x << ", y: " << topPotentials[0].y << std::endl;
+//    if (topPotentials.size() >= 3) {
+//        std::cerr << "[0] tick: " << playerView.currentTick << ", score: " << topPotentials[0] << std::endl;
+//        std::cerr << "[1] tick: " << playerView.currentTick << ", score: " << topPotentials[1] << std::endl;
+//        std::cerr << "[2] tick: " << playerView.currentTick << ", score: " << topPotentials[2] << std::endl;
+//        std::cerr << "==========================================" << std::endl;
+//    }
 }
 
 void MyStrategy::createPotentialField(const PlayerView& playerView) {
@@ -710,4 +785,22 @@ void MyStrategy::fillPotential(int x, int y, float score) {
             }
         }
     }
+}
+
+std::ostream& operator<<(std::ostream& out, const Score& score) {
+    out << "{ TOTAL SCORE: " << score.score
+        << ", myBuildingScore: " << score.myBuildingScore << ", myBuilderScore: " << score.myBuilderScore
+        << ", myPowerScore: " << score.myPowerScore << ", enemyPowerScore: " << score.enemyPowerScore
+        << ", powerScore: " << score.powerScore << " }";
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const PotentialCell& cell) {
+    out << "{ score: " << cell.score << ", x: " << cell.x << ", y: " << cell.y << " }";
+    return out;
+}
+
+void Score::calcScore() {
+    powerScore = std::max((1 + enemyPowerScore - myPowerScore) * 3.0f, 0.0f);
+    score = myBuilderScore + myBuildingScore + powerScore;
 }
