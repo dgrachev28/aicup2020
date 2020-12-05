@@ -200,7 +200,7 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
     } else {
         int maxBuildersCount;
         if (economicFactor > 5.0) {
-            maxBuildersCount = 50;
+            maxBuildersCount = 60;
 //        } else if (economicFactor > 3.0) {
 //            maxBuildersCount = 60;
         } else if (economicFactor > 2.0) {
@@ -358,27 +358,26 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
     }
 
     for (const Entity& unit : units) {
-//        if (!builderMeta.count(unit.id)) {
-//            int minResourceDist = 1000;
-//            Vec2Int minResourcePosition;
-//            for (const auto& resource : playerView.entities) {
-//                if (resource.entityType == RESOURCE) {
-//                    int resourceDist = dist(unit, resource);
-//                    if (resourceDist < minResourceDist) {
-//                        minResourceDist = resourceDist;
-//                        minResourcePosition = unit.position;
-//                    }
-//                }
-//            }
-//            if (minResourceDist < 30) {
-//                builderMeta[unit.id] = BuilderMeta(BuilderState::FARM);
-//                actions[unit.id] = AttackAction({1000, {RESOURCE}});
-//            } else {
-//                builderMeta[unit.id] = BuilderMeta({BuilderState::MOVE_TO_FARM, minResourcePosition});
-//                actions[unit.id] = MoveAction(minResourcePosition, false, false);
-//            }
-//            continue;
-//        }
+        bool isAfraidEnemy = false;
+        for (const DistId& distId : myToEnemyMapping.at(unit.id)) {
+            const auto& enemy = playerView.entitiesById.at(distId.entityId);
+            if (enemy.entityType == RANGED_UNIT && distId.distance <= 7
+                    || enemy.entityType == MELEE_UNIT && distId.distance <= 3) {
+                for (const auto& edge : getEdges(unit.position)) {
+                    if (world[edge.x][edge.y] == -1 && dist(edge, enemy.position) > distId.distance) {
+                        actions[unit.id] = MoveAction({edge.x, edge.y}, false, false);
+                        isAfraidEnemy = true;
+                        break;
+                    }
+                }
+            }
+            if (isAfraidEnemy || distId.distance > 7) {
+                break;
+            }
+        }
+        if (isAfraidEnemy) {
+            continue;
+        }
         if (houseBuilders.count(unit.id)) {
             continue;
         }
