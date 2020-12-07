@@ -2,6 +2,7 @@
 #define _MY_STRATEGY_HPP_
 
 #include <set>
+#include <map>
 #include <unordered_set>
 #include "DebugInterface.hpp"
 #include "model/Model.hpp"
@@ -30,7 +31,13 @@ struct DistId {
     int entityId;
 
     bool operator<(const DistId& distId) const {
-        return distance < distId.distance;
+        if (distance < distId.distance) {
+            return true;
+        }
+        if (distance > distId.distance) {
+            return false;
+        }
+        return entityId < distId.entityId;
     }
 };
 
@@ -45,6 +52,18 @@ struct PotentialCell {
 
     friend std::ostream& operator<<(std::ostream& out, const PotentialCell& potentialCell);
 };
+
+struct MoveStep {
+    int unitId;
+    int score;
+    Vec2Int target;
+};
+
+//struct MovePlan {
+//    int priority;
+//    int unitId;
+//    std::vector<MoveStep> moves;
+//};
 
 enum class BuilderState {
     FARM,
@@ -83,13 +102,16 @@ public:
 
 //    std::unordered_map<int, std::set<DistId>> entitiesMapping;
 
+    std::map<int, int> movePriorityToUnitId;
+    std::unordered_map<int, std::vector<MoveStep>> unitMoveSteps;
+
     std::unordered_map<int, Vec2Int> lastTargetPositions;
 
     MyStrategy();
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
 
-    std::vector<std::vector<int>> dijkstra(int x, int y);
+    std::vector<std::vector<int>> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
 
 private:
     void getBuildUnitActions(const PlayerView& playerView, Actions& actions);
@@ -119,11 +141,12 @@ private:
     void findTargetEnemies(const PlayerView& playerView);
     void createPotentialField(const PlayerView& playerView);
     void fillPotential(int x, int y, float score);
+    Vec2Int getWarriorTargetPosition(const Entity &unit);
+    void moveBattleUnits(Actions& actions);
+
+    void battleDfs(int unitId, std::unordered_set<int>& groupedUnits, std::unordered_map<int, int>& group);
 
     // End of Ranged units actions
-
-
-    Vec2Int getWarriorTargetPosition(const Entity &unit);
 };
 
 #endif

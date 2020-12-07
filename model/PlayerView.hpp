@@ -40,7 +40,7 @@ public:
 
     int getInactiveHousesCount() const;
 
-    const std::vector<Entity>& GetMyEntities(EntityType entityType) const;
+    const std::vector<Entity>& getMyEntities(EntityType entityType) const;
 
     static PlayerView readFrom(InputStream& stream);
     void writeTo(OutputStream& stream) const;
