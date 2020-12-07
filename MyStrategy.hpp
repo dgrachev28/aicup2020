@@ -19,6 +19,7 @@ struct Score {
     float score = 0.0f;
 
     void calcScore();
+    void calcAttackScore();
 
     bool operator<(const Score& other) const {
         return score < other.score;
@@ -55,8 +56,9 @@ struct PotentialCell {
 
 struct MoveStep {
     int unitId;
-    int score;
     Vec2Int target;
+    int score;
+    int index = 0;
 };
 
 //struct MovePlan {
@@ -94,6 +96,7 @@ public:
     int edgeHousesShiftY;
 
     int world[80][80];
+    std::unordered_map<Vec2Int, std::vector<Vec2Int>> edgesMap;
 
     std::unordered_map<int, std::set<DistId>> myToMyMapping;
     std::unordered_map<int, std::set<DistId>> myToEnemyMapping;
@@ -102,7 +105,7 @@ public:
 
 //    std::unordered_map<int, std::set<DistId>> entitiesMapping;
 
-    std::map<int, int> movePriorityToUnitId;
+    std::map<int, std::unordered_set<int>> movePriorityToUnitIds;
     std::unordered_map<int, std::vector<MoveStep>> unitMoveSteps;
 
     std::unordered_map<int, Vec2Int> lastTargetPositions;
@@ -111,6 +114,7 @@ public:
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
 
+    std::vector<std::vector<int>> bfs(const std::vector<Vec2Int>& startCells);
     std::vector<std::vector<int>> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
 
 private:
@@ -147,6 +151,10 @@ private:
     void battleDfs(int unitId, std::unordered_set<int>& groupedUnits, std::unordered_map<int, int>& group);
 
     // End of Ranged units actions
+
+    void addMove(int unitId, const Vec2Int& target, int score, int priority);
+    void handleMoves(Actions& actions);
+
 };
 
 #endif
