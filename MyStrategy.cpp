@@ -110,8 +110,8 @@ std::vector<std::vector<int>> MyStrategy::dijkstra(const std::vector<Vec2Int>& s
             int len = 1;
             if (isWeighted) {
                 len = 10;
-                if (world[edge.x][edge.y] != -1) {
-                    const auto &type = playerView->entitiesById.at(world[edge.x][edge.y]).entityType;
+                if (!world(edge).isEmpty()) {
+                    const auto& type = world(edge).getEntityType();
                     if (BUILDINGS.count(type)) {
                         continue;
                     }
@@ -182,14 +182,14 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
 
     for (int i = 0; i < 80; ++i) {
         for (int j = 0; j < 80; ++j) {
-            world[i][j] = -1;
+            world(i, j) = {i, j};
         }
     }
-    for (const auto& entity : playerView.entities) {
+    for (auto& entity : playerView.entities) {
         const EntityProperties& properties = playerView.entityProperties.at(entity.entityType);
         for (int i = entity.position.x; i < entity.position.x + properties.size; ++i) {
             for (int j = entity.position.y; j < entity.position.y + properties.size; ++j) {
-                world[i][j] = entity.id;
+                world(i, j).entity = &entity;
             }
         }
     }
@@ -208,6 +208,7 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
     getBuildUnitActions(playerView, actions);
 
     handleMoves(actions);
+    handleAttackActions(actions);
     this->playerView = nullptr;
     return actions;
 }
@@ -292,7 +293,7 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
                                 < std::abs(topPotentials[0].x - v2.x) + std::abs(topPotentials[0].y - v2.y);
                     });
                     for (const auto& pos : buildPositions) {
-                        if (world[pos.x][pos.y] == -1) {
+                        if (world(pos).isEmpty()) {
                             actions[rangedBase.id] = BuildAction(RANGED_UNIT, pos);
                             break;
                         }
@@ -399,7 +400,7 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
             }
 
             for (const auto &housePosition : housePositions) {
-                int unitId = isEmptyForHouse(playerView, housePosition.x, housePosition.y, 1);
+                int unitId = isEmptyForHouse(housePosition.x, housePosition.y, 1);
                 if (unitId != -1) {
                     potentialHouseBuilders.push_back({unitId, {housePosition.x - 1, housePosition.y - 1}});
                 }
@@ -438,7 +439,7 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
             if (enemy.entityType == RANGED_UNIT && distId.distance <= 7
                     || enemy.entityType == MELEE_UNIT && distId.distance <= 3) {
                 for (const auto& edge : getEdges(unit.position)) {
-                    if (world[edge.x][edge.y] == -1 && dist(edge, enemy.position) > distId.distance) {
+                    if (world(edge).isEmpty() && dist(edge, enemy.position) > distId.distance) {
                         actions[unit.id] = MoveAction({edge.x, edge.y}, false, false);
                         isAfraidEnemy = true;
                         break;
@@ -460,14 +461,14 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
         const auto& edges = getEdges(unit.position);
         bool shouldRepair = false;
         for (const auto& edge : edges) {
-            if (brokenBuildings.count(world[edge.x][edge.y])) {
-                actions[unit.id] = RepairAction(world[edge.x][edge.y]);
+            if (brokenBuildings.count(world(edge).getEntityId())) {
+                actions[unit.id] = RepairAction(world(edge).getEntityId());
                 shouldRepair = true;
                 break;
-            } else if (world[edge.x][edge.y] == -1) {
+            } else if (world(edge).isEmpty()) {
                 const auto& edgesOfEdge = getEdges(edge);
                 for (const auto& e : edgesOfEdge) {
-                    if (brokenBuildings.count(world[e.x][e.y])) {
+                    if (brokenBuildings.count(world(e).getEntityId())) {
                         actions[unit.id] = MoveAction({edge.x, edge.y}, false, false);
                         shouldRepair = true;
                         break;
@@ -514,54 +515,54 @@ std::unordered_map<int, std::set<DistId>> MyStrategy::calculateDistances(
     return result;
 }
 
-bool MyStrategy::checkBuilderUnit(const PlayerView& playerView, int x, int y) {
-    return world[x][y] != -1 && playerView.entitiesById.at(world[x][y]).entityType == BUILDER_UNIT
-           && playerView.entitiesById.at(world[x][y]).playerId == playerView.myId;
+bool MyStrategy::checkBuilderUnit(int x, int y) {
+    return checkWorldBounds(x, y)
+           && world(x, y).eqEntityType(BUILDER_UNIT)
+           && world(x, y).eqPlayerId(playerView->myId);
 }
 
-int MyStrategy::isEmptyForHouse(const PlayerView& playerView, int x, int y, int size) {
+int MyStrategy::isEmptyForHouse(int x, int y, int size) {
     int unitSize = size + 1;
     for (int i = x - size; i <= x + size; ++i) {
         for (int j = y - size; j <= y + size; ++j) {
-            if (world[i][j] != -1) {
+            if (!world(x, y).isEmpty()) {
                 return -1;
             }
         }
     }
-    if (size == 2) {
-        std::vector<int> neighbours{world[x + 5][y + 5], world[x + 5][y - 5], world[x - 5][y + 5], world[x - 5][y - 5]};
-        for (int n : neighbours) {
-            if (n != -1 && playerView.entitiesById.at(n).entityType == RANGED_BASE) {
-                return -1;
-            }
-        }
-    }
+//    if (size == 2) {
+//        std::vector<int> neighbours{world[x + 5][y + 5], world[x + 5][y - 5], world[x - 5][y + 5], world[x - 5][y - 5]};
+//        for (int n : neighbours) {
+//            if (n != -1 && playerView.entitiesById.at(n).entityType == RANGED_BASE) {
+//                return -1;
+//            }
+//        }
+//    }
 
     for (int i = x - (size + 6); i <= x + (size + 6); ++i) {
         for (int j = y - (size + 6); j <= y + (size + 6); ++j) {
-            if (i >= 0 && j >= 0 && i <= 79 && j <= 79 && world[i][j] != -1
-                    && playerView.entitiesById.at(world[i][j]).entityType == RANGED_UNIT
-                    && playerView.entitiesById.at(world[i][j]).playerId != playerView.myId) {
+            if (checkWorldBounds(i, j) && world(x, y).eqEntityType(RANGED_UNIT)
+                    && !world(i, j).eqPlayerId(playerView->myId)) {
                 return -1;
             }
         }
     }
 
     for (int i = x - size; i <= x + size; ++i) {
-        if (y >= unitSize && checkBuilderUnit(playerView, i, y - unitSize)) {
-            return world[i][y - unitSize];
+        if (checkBuilderUnit(i, y - unitSize)) {
+            return world(i, y - unitSize).getEntityId();
         }
-        if (y <= 79 - unitSize && checkBuilderUnit(playerView, i, y + unitSize)) {
-            return world[i][y + unitSize];
+        if (checkBuilderUnit(i, y + unitSize)) {
+            return world(i, y + unitSize).getEntityId();
         }
     }
 
     for (int i = y - size; i <= y + size; ++i) {
-        if (x >= unitSize && checkBuilderUnit(playerView, x - unitSize, i)) {
-            return world[x - unitSize][i];
+        if (checkBuilderUnit(x - unitSize, i)) {
+            return world(x - unitSize, i).getEntityId();
         }
-        if (x <= 79 - unitSize && checkBuilderUnit(playerView, x + unitSize, i)) {
-            return world[x + unitSize][i];
+        if (checkBuilderUnit(x + unitSize, i)) {
+            return world(x + unitSize, i).getEntityId();
         }
     }
     return -1;
@@ -569,17 +570,17 @@ int MyStrategy::isEmptyForHouse(const PlayerView& playerView, int x, int y, int 
 
 BuildAction MyStrategy::createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive) {
     if (isAggresive) {
-        if (world[base.position.x + 4][base.position.y + 5] == -1) {
+        if (world(base.position.x + 4, base.position.y + 5).isEmpty()) {
             return BuildAction(unitType, {base.position.x + 4, base.position.y + 5});
         }
-        if (world[base.position.x + 5][base.position.y + 4] == -1) {
+        if (world(base.position.x + 5, base.position.y + 4).isEmpty()) {
             return BuildAction(unitType, {base.position.x + 5, base.position.y + 4});
         }
     } else {
-        if (world[base.position.x][base.position.y - 1] == -1) {
+        if (world(base.position.x, base.position.y - 1).isEmpty()) {
             return BuildAction(unitType, {base.position.x, base.position.y - 1});
         }
-        if (world[base.position.x - 1][base.position.y] == -1) {
+        if (world(base.position.x - 1, base.position.y).isEmpty()) {
             return BuildAction(unitType, {base.position.x - 1, base.position.y});
         }
     }
@@ -637,8 +638,8 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             return dijkstraResults.at(targetPosition)[v1.x][v1.y] < dijkstraResults.at(targetPosition)[v2.x][v2.y];
         });
 
-        if (world[edges[0].x][edges[0].y] != -1 && playerView.entitiesById.at(world[edges[0].x][edges[0].y]).entityType == RESOURCE) {
-            actions[unit.id] = AttackAction(playerView.entitiesById.at(world[edges[0].x][edges[0].y]).id);
+        if (world(edges[0]).eqEntityType(RESOURCE)) {
+            actions[unit.id] = AttackAction(world(edges[0]).getEntityId());
         } else {
             for (const auto& edge : edges) {
                 addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
@@ -676,8 +677,8 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             return dijkstraResults.at(targetPosition)[v1.x][v1.y] < dijkstraResults.at(targetPosition)[v2.x][v2.y];
         });
 
-        if (world[edges[0].x][edges[0].y] != -1 && playerView.entitiesById.at(world[edges[0].x][edges[0].y]).entityType == RESOURCE) {
-            actions[unit.id] = AttackAction(playerView.entitiesById.at(world[edges[0].x][edges[0].y]).id);
+        if (world(edges[0]).eqEntityType(RESOURCE)) {
+            actions[unit.id] = AttackAction(world(edges[0]).getEntityId());
         } else {
             for (const auto& edge : edges) {
                 addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
@@ -721,7 +722,7 @@ Vec2Int MyStrategy::getWarriorTargetPosition(const Entity &unit) {
 
 
 void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
-    static std::unordered_map<EntityType, float> unitScore = {{RANGED_UNIT, 1.0}, {MELEE_UNIT, 0.6}};
+    static std::unordered_map<EntityType, float> unitScore = {{RANGED_UNIT, 1.0}, {MELEE_UNIT, 0.8}};
     const int kLargestDistance = 40;
 
     std::vector<PotentialCell> potentials;
@@ -1030,7 +1031,7 @@ void MyStrategy::handleMoves(Actions& actions) {
     std::vector<std::vector<int>> moveWorld{80, std::vector<int>(80, -1)};
     for (int i = 0; i < 80; ++i) {
         for (int j = 0; j < 80; ++j) {
-            if (world[i][j] != -1 && !UNITS.count(playerView->entitiesById.at(world[i][j]).entityType)) {
+            if (world(i, j).entity && !UNITS.count(world(i, j).getEntityType())) {
                 moveWorld[i][j] = -2;
             }
         }
@@ -1055,6 +1056,7 @@ void MyStrategy::handleMoves(Actions& actions) {
                 if (currentPosMovedUnitId >= 0 && playerView->entitiesById.at(currentPosMovedUnitId).position == moveStep.target) {
                     continue;
                 }
+                // TODO: turrets here
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
                 actions[unitId] = MoveAction(moveStep.target, false, false);
                 break;
@@ -1064,6 +1066,22 @@ void MyStrategy::handleMoves(Actions& actions) {
     }
     unitMoveSteps.clear();
     movePriorityToUnitIds.clear();
+
+}
+
+Cell& MyStrategy::world(int x, int y) {
+    return world_[x][y];
+}
+
+Cell& MyStrategy::world(const Vec2Int& v) {
+    return world(v.x, v.y);
+}
+
+bool MyStrategy::checkWorldBounds(int x, int y) {
+    return x >= 0 && x < 80 && y >= 0 && y < 80;
+}
+
+void MyStrategy::handleAttackActions(Actions& actions) {
 
 }
 

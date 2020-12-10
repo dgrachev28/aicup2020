@@ -7,6 +7,7 @@
 #include "DebugInterface.hpp"
 #include "model/Model.hpp"
 #include <ostream>
+#include <array>
 
 using Actions = std::unordered_map<int, EntityAction>;
 
@@ -67,6 +68,43 @@ struct MoveStep {
 //    std::vector<MoveStep> moves;
 //};
 
+struct Cell {
+    int x;
+    int y;
+
+    bool turretDanger = false;
+    const Entity* entity = nullptr;
+
+    bool isEmpty() const {
+        return entity == nullptr;
+    }
+
+    int getEntityId() const {
+        if (isEmpty()) {
+            return -1;
+        }
+        return entity->id;
+    }
+
+    EntityType getEntityType() const {
+        return entity->entityType;
+    }
+
+    bool eqEntityType(EntityType entityType) const {
+        return entity && entity->entityType == entityType;
+    }
+
+    bool eqPlayerId(int playerId) const {
+        return entity && entity->playerId == playerId;
+    }
+
+    int getPlayerId() const {
+        return entity->playerId;
+    }
+};
+
+using World = std::array<std::array<Cell, 80>, 80>;
+
 enum class BuilderState {
     FARM,
     MOVE_TO_FARM,
@@ -89,13 +127,9 @@ class MyStrategy {
 public:
     const PlayerView* playerView;
 
-    int houseBuilderId = -1;
-
     std::unordered_map<int, BuilderMeta> builderMeta;
     int edgeHousesShiftX;
     int edgeHousesShiftY;
-
-    int world[80][80];
     std::unordered_map<Vec2Int, std::vector<Vec2Int>> edgesMap;
 
     std::unordered_map<int, std::set<DistId>> myToMyMapping;
@@ -118,6 +152,11 @@ public:
     std::vector<std::vector<int>> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
 
 private:
+    World world_;
+    Cell& world(int x, int y);
+    Cell& world(const Vec2Int& v);
+    bool checkWorldBounds(int x, int y);
+
     void getBuildUnitActions(const PlayerView& playerView, Actions& actions);
     void getBuildBaseActions(const PlayerView& playerView, Actions& actions);
     void getFarmerActions(const PlayerView& playerView, Actions& actions);
@@ -129,9 +168,9 @@ private:
             int valuePlayerId
     );
 
-    bool checkBuilderUnit(const PlayerView& playerView, int x, int y);
+    bool checkBuilderUnit(int x, int y);
 
-    int isEmptyForHouse(const PlayerView& playerView, int x, int y, int size);
+    int isEmptyForHouse(int x, int y, int size);
 
     BuildAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
 
@@ -154,6 +193,8 @@ private:
 
     void addMove(int unitId, const Vec2Int& target, int score, int priority);
     void handleMoves(Actions& actions);
+
+    void handleAttackActions(Actions& actions);
 
 };
 
