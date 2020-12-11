@@ -148,8 +148,8 @@ public:
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
 
-    std::vector<std::vector<int>> bfs(const std::vector<Vec2Int>& startCells);
-    std::vector<std::vector<int>> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
+    std::array<std::array<int, 80>, 80> bfs(const std::vector<Vec2Int>& startCells);
+    std::array<std::array<int, 80>, 80> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
 
 private:
     World world_;
@@ -194,7 +194,27 @@ private:
     void addMove(int unitId, const Vec2Int& target, int score, int priority);
     void handleMoves(Actions& actions);
 
+    // Shoot
     void handleAttackActions(Actions& actions);
+
+    void resolveSimpleShoots(
+            std::unordered_map<int, int>& enemyHealth,
+            std::unordered_map<int, std::unordered_set<int>>& myToEnemy,
+            std::unordered_map<int, std::unordered_set<int>>& enemyToMy,
+            Actions &actions
+    );
+
+    void shoot(
+            int myId,
+            int enemyId,
+            std::unordered_map<int, int> &enemyHealth,
+            std::unordered_map<int, std::unordered_set<int>> &myToEnemy,
+            std::unordered_map<int, std::unordered_set<int>> &enemyToMy,
+            Actions &actions
+    );
+
+
+    // End of Shoot
 
 };
 
