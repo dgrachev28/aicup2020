@@ -180,6 +180,7 @@ MyStrategy::MyStrategy() {
             }
         }
     }
+    freeScoutSpots = {{9, 70}, {70, 9}, {70, 70}};
 }
 
 Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debugInterface) {
@@ -388,28 +389,27 @@ void MyStrategy::getFarmerActions(const PlayerView& playerView, Actions& actions
     std::vector<std::pair<int, Vec2Int>> potentialHouseBuilders;
     EntityType buildType = HOUSE;
 
-//    if ((myPlayer.resource >= 600 && playerView.getMyEntities(RANGED_BASE).size() < 2)
-//            || (myPlayer.resource >= 2000 && playerView.getMyEntities(RANGED_BASE).size() < 3)
-//            || myPlayer.resource >= 6000 && playerView.getMyEntities(RANGED_BASE).size() < 4) {
-//        std::vector<Vec2Int> basePositions;
-//        for (int i = 5; i < 60; i += 1) {
-//            for (int j = 5; j < 60; j += 1) {
-//                if (i + j <= 34) {
-//                    continue;
-//                }
-//                basePositions.emplace_back(i, j);
-//            }
-//        }
-//        for (const auto& position : basePositions) {
-//            int unitId = isEmptyForHouse(playerView, position.x, position.y, 2);
-//            if (unitId != -1) {
-//                potentialHouseBuilders.push_back({unitId, {position.x - 2, position.y - 2}});
-//                buildType = RANGED_BASE;
-//            }
-//        }
-//    }
+    if (playerView.getMyEntities(RANGED_BASE).empty() && myPlayer.resource >= 470) {
+        std::vector<Vec2Int> basePositions;
+        for (int i = 5; i < 60; i += 1) {
+            for (int j = 5; j < 60; j += 1) {
+                if (i < 13 && j < 13) {
+                    continue;
+                }
+                basePositions.emplace_back(i, j);
+            }
+        }
+        for (const auto& position : basePositions) {
+            int unitId = isEmptyForHouse(position.x, position.y, 2);
+            if (unitId != -1) {
+                potentialHouseBuilders.push_back({unitId, {position.x - 2, position.y - 2}});
+                buildType = RANGED_BASE;
+            }
+        }
+    }
     if (potentialHouseBuilders.empty()) {
-        if (playerView.getFood() < 10 && myPlayer.resource >= 50 && playerView.getInactiveHousesCount() < 3) {
+        if (playerView.getFood() < 10 && myPlayer.resource >= 47 && playerView.getInactiveHousesCount() < 3
+        && (!playerView.getMyEntities(RANGED_BASE).empty() || playerView.getMyEntities(HOUSE).size() < 4 || myPlayer.resource >= 600)) {
             std::vector<Vec2Int> housePositions;
             if (playerView.getMyEntities(HOUSE).empty()) {
                 for (int i = 1; i < 60; ++i) {
@@ -626,40 +626,77 @@ BuildAction MyStrategy::createBuildUnitAction(const Entity& base, EntityType uni
 }
 
 
-
 void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& actions) {
-    bool isAnyEnemy = false;
-    for (const Entity& entity : playerView.entities) {
-        if (entity.playerId != playerView.myId && entity.playerId != -1) {
-            isAnyEnemy = true;
-            break;
+    const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
+    if (playerView.fogOfWar) {
+        std::vector<int> scoutsToRemove;
+        for (const auto& [unitId, target] : scouts) {
+            if (!playerView.entitiesById.count(unitId)) {
+                scoutsToRemove.push_back(unitId);
+                freeScoutSpots.insert(target);
+            }
         }
-    }
-    if (!isAnyEnemy) {
-        return;
+        for (int unitId : scoutsToRemove) {
+            scouts.erase(unitId);
+        }
+
+        std::unordered_set<Vec2Int> newFreeScoutSpots;
+        for (const auto& spot : freeScoutSpots) {
+            int minDist = 100000;
+            int scoutId = -1;
+            for (const auto& unit : rangedUnits) {
+                int distance = dist(unit.position, spot);
+                if (!scouts.count(unit.id) && distance < minDist) {
+                    minDist = distance;
+                    scoutId = unit.id;
+                }
+            }
+            if (scoutId != -1) {
+                scouts[scoutId] = spot;
+            } else {
+                newFreeScoutSpots.insert(spot);
+            }
+        }
+        freeScoutSpots = newFreeScoutSpots;
+    } else {
+        bool isAnyEnemy = false;
+        for (const Entity& entity : playerView.entities) {
+            if (entity.playerId != playerView.myId && entity.playerId != -1) {
+                isAnyEnemy = true;
+                break;
+            }
+        }
+        if (!isAnyEnemy) {
+            return;
+        }
     }
 
     findTargetEnemies(playerView);
 
     std::unordered_map<Vec2Int, std::array<std::array<int, 80>, 80>> dijkstraResults;
 
-    const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
+//    const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
     const auto& meleeUnits = playerView.getMyEntities(MELEE_UNIT);
     int armySize = rangedUnits.size() + meleeUnits.size();
     for (const Entity& unit : rangedUnits) {
-        if (myToEnemyMapping[unit.id].empty()) {
-            continue;
+        int minEnemyDist = 100000;
+        int minEnemyId = -1;
+        if (!myToEnemyMapping[unit.id].empty()) {
+            minEnemyDist = myToEnemyMapping[unit.id].begin()->distance;
+            minEnemyId = myToEnemyMapping[unit.id].begin()->entityId;
         }
-        int minEnemyDist = myToEnemyMapping[unit.id].begin()->distance;
-        int minEnemyId = myToEnemyMapping[unit.id].begin()->entityId;
+
 //        std::cout << "id: " << unit.id << ", my position: (" << unit.position.x << ", " << unit.position.y
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
-        if (playerView.currentTick > 100 || minEnemyDist < 30) {
+        if ((playerView.currentTick > 100 || minEnemyDist < 30) && minEnemyId != -1) {
             targetPosition = getWarriorTargetPosition(unit);
             if (targetPosition == Vec2Int(0, 0)) {
                 targetPosition = playerView.entitiesById.at(minEnemyId).position;
             }
+        }
+        if (playerView.fogOfWar && scouts.count(unit.id)) {
+            targetPosition = scouts[unit.id];
         }
         if (minEnemyDist < 6) {
             actions[unit.id] = AttackAction({1000, {
