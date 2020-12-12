@@ -221,6 +221,9 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
             if (myRangedCount < 6) {
                 for (int i = entity.position.x - 5; i <= entity.position.x + 6; ++i) {
                     for (int j = entity.position.y - 5; j <= entity.position.y + 6; ++j) {
+                        if (!checkWorldBounds(i, j)) {
+                            continue;
+                        }
                         int distance = std::min({
                                                         dist({i, j}, entity.position),
                                                         dist({i, j}, {entity.position.x, entity.position.y + 1}),
