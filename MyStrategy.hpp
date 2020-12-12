@@ -20,6 +20,7 @@ struct Score {
     float score = 0.0f;
 
     void calcScore();
+    void calcScore2();
     void calcAttackScore();
 
     bool operator<(const Score& other) const {
@@ -47,6 +48,7 @@ struct PotentialCell {
     Score score;
     int x;
     int y;
+    int count;
 
     bool operator<(const PotentialCell& other) const {
         return score.score < other.score.score;
@@ -189,6 +191,7 @@ private:
 
     float potentialField[80][80];
     std::vector<PotentialCell> topPotentials;
+    std::vector<PotentialCell> topAttackPotentials;
 
     void findTargetEnemies(const PlayerView& playerView);
     void createPotentialField(const PlayerView& playerView);
