@@ -10,6 +10,7 @@
 #include <array>
 
 using Actions = std::unordered_map<int, EntityAction>;
+using EntityPtr = const Entity*;
 
 struct Score {
     float myBuildingScore;
@@ -96,6 +97,10 @@ struct Cell {
         return entity && entity->entityType == entityType;
     }
 
+    bool inEntityTypes(const std::unordered_set<EntityType>& entityTypes) const {
+        return entity && entityTypes.contains(entity->entityType);
+    }
+
     bool eqPlayerId(int playerId) const {
         return entity && entity->playerId == playerId;
     }
@@ -137,7 +142,8 @@ public:
     std::unordered_map<int, BuilderMeta> builderMeta;
     int edgeHousesShiftX;
     int edgeHousesShiftY;
-    std::unordered_map<Vec2Int, std::vector<Vec2Int>> edgesMap;
+//    std::unordered_map<Vec2Int, std::vector<Vec2Int>> edgesMap;
+    std::array<std::array<std::vector<Vec2Int>, 80>, 80> edgesMap;
 
     std::unordered_map<int, std::set<DistId>> myToMyMapping;
     std::unordered_map<int, std::set<DistId>> myToEnemyMapping;
@@ -146,8 +152,14 @@ public:
 
 //    std::unordered_map<int, std::set<DistId>> entitiesMapping;
 
+    std::array<std::array<int, 80>, 80> enemyMap;
+    std::array<std::array<int, 80>, 80> myMap;
+
     std::map<int, std::unordered_set<int>> movePriorityToUnitIds;
     std::unordered_map<int, std::vector<MoveStep>> unitMoveSteps;
+    Actions builderAttackActions;
+
+    std::vector<Vec2Int> farmTargets_;
 
     std::unordered_map<int, Vec2Int> lastTargetPositions;
 
@@ -159,7 +171,16 @@ public:
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
 
+    std::array<std::array<int, 80>, 80>
+    bfs(const std::vector<Vec2Int>& startCells,
+        const std::unordered_set<EntityType>& obstacleTypes,
+        const std::unordered_set<int>& obstacleUnitIds);
+
     std::array<std::array<int, 80>, 80> bfs(const std::vector<Vec2Int>& startCells);
+
+    std::vector<Vec2Int> bfsBuilderResources(const std::vector<Vec2Int>& startCells,
+        const std::unordered_set<EntityType>& obstacleTypes,
+        const std::unordered_set<int>& obstacleUnitIds);
     std::array<std::array<int, 80>, 80> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
 
 private:
@@ -168,10 +189,10 @@ private:
     Cell& world(const Vec2Int& v);
     bool checkWorldBounds(int x, int y);
 
+    void stepInit(const PlayerView& playerView);
+
     void getBuildUnitActions(const PlayerView& playerView, Actions& actions);
-    void getBuildBaseActions(const PlayerView& playerView, Actions& actions);
-    void getFarmerActions(const PlayerView& playerView, Actions& actions);
-    void getWarriorActions(const PlayerView& playerView, Actions& actions);
+    void setBuilderUnitsActions(Actions& actions);
 
     std::unordered_map<int, std::set<DistId>> calculateDistances(
             const PlayerView &playerView,
@@ -179,11 +200,12 @@ private:
             int valuePlayerId
     );
 
-    bool checkBuilderUnit(int x, int y);
+    bool checkBuilderUnit(int x, int y, const std::unordered_set<int>& busyBuilders);
 
-    int isEmptyForHouse(int x, int y, int size);
+    int isEmptyForHouse(int x, int y, int size, const std::unordered_set<int>& busyBuilders);
 
-    BuildAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
+    EntityAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
+    EntityAction createBuildUnitAction2(const Entity& base, EntityType unitType, const Vec2Int& target);
 
 
     // Ranged units actions
@@ -208,26 +230,32 @@ private:
 
     // Shoot
     void handleAttackActions(Actions& actions);
+    void handleBuilderAttackActions(Actions& actions);
 
     void resolveSimpleShoots(
             std::unordered_map<int, int>& enemyHealth,
             std::unordered_map<int, std::unordered_set<int>>& myToEnemy,
             std::unordered_map<int, std::unordered_set<int>>& enemyToMy,
-            Actions &actions
+            Actions& actions
     );
 
     void shoot(
             int myId,
             int enemyId,
-            std::unordered_map<int, int> &enemyHealth,
-            std::unordered_map<int, std::unordered_set<int>> &myToEnemy,
-            std::unordered_map<int, std::unordered_set<int>> &enemyToMy,
-            Actions &actions
+            std::unordered_map<int, int>& enemyHealth,
+            std::unordered_map<int, std::unordered_set<int>>& myToEnemy,
+            std::unordered_map<int, std::unordered_set<int>>& enemyToMy,
+            Actions& actions
     );
-
-
     // End of Shoot
 
+    // Builders find resources
+    void setRepairBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
+    void setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
+    void setRunningFromEnemyBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
+    void setAttackBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
+    void setFarmers(std::unordered_set<int>& busyBuilders, Actions& actions);
+    void setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions& actions);
 };
 
 #endif

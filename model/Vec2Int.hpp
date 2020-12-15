@@ -14,6 +14,7 @@ public:
     void writeTo(OutputStream& stream) const;
     bool operator==(const Vec2Int& other) const;
     bool operator<(const Vec2Int& other) const;
+    friend std::ostream& operator<<(std::ostream& out, const Vec2Int& potentialCell);
 };
 namespace std {
     template<>
