@@ -145,12 +145,12 @@ public:
 //    std::unordered_map<Vec2Int, std::vector<Vec2Int>> edgesMap;
     std::array<std::array<std::vector<Vec2Int>, 80>, 80> edgesMap;
 
-    std::unordered_map<int, std::set<DistId>> myToMyMapping;
-    std::unordered_map<int, std::set<DistId>> myToEnemyMapping;
-    std::unordered_map<int, std::set<DistId>> enemyToMyMapping;
-    std::unordered_map<int, std::set<DistId>> enemyToEnemyMapping;
+    std::unordered_map<int, std::vector<DistId>> myToMyMapping;
+    std::unordered_map<int, std::vector<DistId>> myToEnemyMapping;
+    std::unordered_map<int, std::vector<DistId>> enemyToMyMapping;
+    std::unordered_map<int, std::vector<DistId>> enemyToEnemyMapping;
 
-//    std::unordered_map<int, std::set<DistId>> entitiesMapping;
+//    std::unordered_map<int, std::vector<DistId>> entitiesMapping;
 
     std::array<std::array<int, 80>, 80> enemyMap;
     std::array<std::array<int, 80>, 80> myMap;
@@ -174,7 +174,7 @@ public:
     std::array<std::array<int, 80>, 80>
     bfs(const std::vector<Vec2Int>& startCells,
         const std::unordered_set<EntityType>& obstacleTypes,
-        const std::unordered_set<int>& obstacleUnitIds);
+        const std::vector<int>& obstacleUnitIds);
 
     std::array<std::array<int, 80>, 80> bfs(const std::vector<Vec2Int>& startCells);
 
@@ -194,7 +194,7 @@ private:
     void getBuildUnitActions(const PlayerView& playerView, Actions& actions);
     void setBuilderUnitsActions(Actions& actions);
 
-    std::unordered_map<int, std::set<DistId>> calculateDistances(
+    std::unordered_map<int, std::vector<DistId>> calculateDistances(
             const PlayerView &playerView,
             int keyPlayerId,
             int valuePlayerId
@@ -204,7 +204,7 @@ private:
 
     int isEmptyForHouse(int x, int y, int size, const std::unordered_set<int>& busyBuilders);
 
-    EntityAction createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive);
+    EntityAction createBuildUnitAction(const Entity& base, EntityType unitType);
     EntityAction createBuildUnitAction2(const Entity& base, EntityType unitType, const Vec2Int& target);
 
 

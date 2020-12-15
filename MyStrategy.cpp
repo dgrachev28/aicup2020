@@ -73,7 +73,7 @@ std::vector<Vec2Int> getEdges(const Vec2Int& v, bool include = false) {
 
 std::array<std::array<int, 80>, 80>
 MyStrategy::bfs(const std::vector<Vec2Int>& startCells, const std::unordered_set<EntityType>& obstacleTypes,
-                const std::unordered_set<int>& obstacleUnitIds) {
+                const std::vector<int>& obstacleUnitIds) {
     std::array<std::array<int, 80>, 80> d;
     for (int i = 0; i < 80; ++i) {
         for (int j = 0; j < 80; ++j) {
@@ -93,7 +93,7 @@ MyStrategy::bfs(const std::vector<Vec2Int>& startCells, const std::unordered_set
         for (const Vec2Int& edge : edges) {
             if (d[edge.x][edge.y] > d[v.x][v.y] + 1
                     && !world(edge).inEntityTypes(obstacleTypes)
-                    && !obstacleUnitIds.contains(world(edge).getEntityId())) {
+                    && std::find(obstacleUnitIds.begin(), obstacleUnitIds.end(), world(edge).getEntityId()) == obstacleUnitIds.end()) {
                 d[edge.x][edge.y] = d[v.x][v.y] + 1;
                 q.push(edge);
             }
@@ -362,29 +362,13 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
         }
     }
     float economicFactor = static_cast<float>(resourcesCount) / (static_cast<float>(enemiesCount) + 0.0001f);
-//    std::cerr << "currentTick: " << playerView.currentTick << "economicFactor: " << economicFactor << std::endl;
     if (playerView.currentTick < 100 && buildersCount < 20) {
         for (const Entity& builderBase : playerView.getMyEntities(BUILDER_BASE)) {
-            actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, buildersCount > 10);
+            actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT);
         }
     } else {
         int maxBuildersCount;
-//        if (economicFactor > 5.0) {
-//            maxBuildersCount = 35;
-////        } else if (economicFactor > 3.0) {
-////            maxBuildersCount = 60;
-//        } else if (economicFactor > 2.0) {
-//            maxBuildersCount = 35;
-//        } else if (economicFactor > 0.5) {
-//            maxBuildersCount = 20;
-//        } else if (economicFactor > 0.1) {
-//            maxBuildersCount = 5;
-//        }
         int maxRangedCount;
-//        if (playerView.playersById.at(playerView.myId).resource < 40) {
-//            maxRangedCount = 20;
-//            maxBuildersCount = 45;
-//        }
         if (playerView.playersById.at(playerView.myId).resource < 500) {
             maxRangedCount = 40;
             maxBuildersCount = 50;
@@ -405,47 +389,20 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
 
         if (rangedCount < maxRangedCount) {
             for (const Entity& rangedBase : playerView.getMyEntities(RANGED_BASE)) {
-                if (topPotentials.empty()) {
-                    actions[rangedBase.id] = createBuildUnitAction(rangedBase, RANGED_UNIT, true);
-                } else {
-                    std::vector<Vec2Int> buildPositions;
-                    buildPositions.reserve(20);
-                    for (int i = 0; i < 5; ++i) {
-                        buildPositions.emplace_back(rangedBase.position.x - 1, rangedBase.position.y + i);
-                        buildPositions.emplace_back(rangedBase.position.x + i, rangedBase.position.y - 1);
-                        buildPositions.emplace_back(rangedBase.position.x + 5, rangedBase.position.y + i);
-                        buildPositions.emplace_back(rangedBase.position.x + i, rangedBase.position.y + 5);
-                    }
-                    std::sort(buildPositions.begin(), buildPositions.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
-                        return std::abs(topPotentials[0].x - v1.x) + std::abs(topPotentials[0].y - v1.y)
-                                < std::abs(topPotentials[0].x - v2.x) + std::abs(topPotentials[0].y - v2.y);
-                    });
-                    for (const auto& pos : buildPositions) {
-                        if (world(pos).isEmpty()) {
-                            actions[rangedBase.id] = BuildAction(RANGED_UNIT, pos);
-                            break;
-                        }
-                    }
+                Vec2Int target{70, 70};
+                if (!topPotentials.empty()) {
+                    target = {topPotentials[0].x, topPotentials[0].y};
                 }
+                actions[rangedBase.id] = createBuildUnitAction2(rangedBase, RANGED_UNIT, target);
             }
         } else {
             for (const Entity& rangedBase : playerView.getMyEntities(RANGED_BASE)) {
                 actions[rangedBase.id] = EntityAction();
             }
         }
-//        if (meleesCount < 20) {
-//            for (const Entity& base : playerView.getMyEntities(MELEE_BASE)) {
-//                actions[base.id] = createBuildUnitAction(base, MELEE_UNIT, true);
-//            }
-//        } else {
-//            for (const Entity& base : playerView.getMyEntities(MELEE_BASE)) {
-//                actions[base.id] = EntityAction();
-//            }
-//        }
-
         if (buildersCount < maxBuildersCount) {
             for (const Entity& builderBase : playerView.getMyEntities(BUILDER_BASE)) {
-                actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT, true);
+                actions[builderBase.id] = createBuildUnitAction(builderBase, BUILDER_UNIT);
             }
         } else {
             for (const Entity& builderBase : playerView.getMyEntities(BUILDER_BASE)) {
@@ -459,15 +416,14 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
                 MELEE_UNIT, RANGED_BASE, RANGED_UNIT, TURRET
         }});
     }
-
 }
 
-std::unordered_map<int, std::set<DistId>> MyStrategy::calculateDistances(
+std::unordered_map<int, std::vector<DistId>> MyStrategy::calculateDistances(
         const PlayerView& playerView,
         int keyPlayerId,
         int valuePlayerId
 ) {
-    std::unordered_map<int, std::set<DistId>> result;
+    std::unordered_map<int, std::vector<DistId>> result;
     for (const Entity& keyEntity : playerView.entities) {
         if (!eqPlayerTeam(keyEntity.playerId, keyPlayerId, playerView)) {
             continue;
@@ -487,9 +443,10 @@ std::unordered_map<int, std::set<DistId>> MyStrategy::calculateDistances(
                 } else {
                     distance = dist(keyEntity, valueEntity);
                 };
-                result[keyEntity.id].insert({distance, valueEntity.id});
+                result[keyEntity.id].push_back({distance, valueEntity.id});
             }
         }
+        std::sort(result[keyEntity.id].begin(), result[keyEntity.id].end());
     }
     return result;
 }
@@ -556,7 +513,7 @@ int MyStrategy::isEmptyForHouse(int x, int y, int size, const std::unordered_set
     return -1;
 }
 
-EntityAction MyStrategy::createBuildUnitAction(const Entity& base, EntityType unitType, bool isAggresive) {
+EntityAction MyStrategy::createBuildUnitAction(const Entity& base, EntityType unitType) {
     if (unitType == BUILDER_UNIT && !farmTargets_.empty()) {
         std::sort(farmTargets_.begin(), farmTargets_.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
             int distance1 = std::min({
@@ -599,23 +556,7 @@ EntityAction MyStrategy::createBuildUnitAction(const Entity& base, EntityType un
         });
         return createBuildUnitAction2(base, unitType, farmTargets_[0]);
     }
-
-    if (isAggresive) {
-        if (world(base.position.x + 4, base.position.y + 5).isEmpty()) {
-            return BuildAction(unitType, {base.position.x + 4, base.position.y + 5});
-        }
-        if (world(base.position.x + 5, base.position.y + 4).isEmpty()) {
-            return BuildAction(unitType, {base.position.x + 5, base.position.y + 4});
-        }
-    } else {
-        if (world(base.position.x, base.position.y - 1).isEmpty()) {
-            return BuildAction(unitType, {base.position.x, base.position.y - 1});
-        }
-        if (world(base.position.x - 1, base.position.y).isEmpty()) {
-            return BuildAction(unitType, {base.position.x - 1, base.position.y});
-        }
-    }
-    return BuildAction(unitType, {base.position.x, base.position.y - 3});
+    return EntityAction();
 }
 
 EntityAction MyStrategy::createBuildUnitAction2(const Entity& base, EntityType unitType, const Vec2Int& target) {
@@ -1669,10 +1610,11 @@ void MyStrategy::setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions&
     farmTargets_ = {farmTargets.begin(), farmTargets.end()};
 
     std::unordered_map<Vec2Int, std::array<std::array<int, 80>, 80>> bfsResults;
+    std::vector<int> busyBuildersVec;
     for (const auto& [builderPtr, target] : buildersToTarget) {
         Vec2Int targetPosition = target;
         if (!bfsResults.contains(target)) {
-            bfsResults[target] = bfs({target}, obstacleTypes, busyBuilders);
+            bfsResults[target] = bfs({target}, obstacleTypes, busyBuildersVec);
         }
         std::vector<Vec2Int> edges = getEdges(builderPtr->position, true);
         std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
