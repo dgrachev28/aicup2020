@@ -176,6 +176,12 @@ public:
         const std::unordered_set<EntityType>& obstacleTypes,
         const std::vector<int>& obstacleUnitIds);
 
+    std::array<std::array<int, 80>, 80>
+    bfs(const std::vector<Vec2Int>& startCells,
+        const std::unordered_set<EntityType>& obstacleTypes,
+        const std::vector<int>& obstacleUnitIds,
+        std::vector<int>& closestUnits);
+
     std::array<std::array<int, 80>, 80> bfs(const std::vector<Vec2Int>& startCells);
 
     std::vector<Vec2Int> bfsBuilderResources(const std::vector<Vec2Int>& startCells,
@@ -256,6 +262,8 @@ private:
     void setAttackBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setFarmers(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions& actions);
+
+    std::vector<Vec2Int> getBuildingEdges(int buildingId);
 };
 
 #endif
