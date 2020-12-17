@@ -135,6 +135,31 @@ struct Scout {
     int unitId;
 };
 
+struct CollisionPriority {
+    int score;
+    std::vector<EntityPtr> units;
+    Vec2Int position;
+
+    bool operator<(const CollisionPriority& other) const {
+        if (position == other.position) {
+            return false;
+        }
+        if (units.size() < other.units.size()) {
+            return true;
+        }
+        if (other.units.size() < units.size()) {
+            return false;
+        }
+        if (score < other.score) {
+            return true;
+        }
+        if (other.score < score) {
+            return false;
+        }
+        return position < other.position;
+    }
+};
+
 class MyStrategy {
 public:
     const PlayerView* playerView;

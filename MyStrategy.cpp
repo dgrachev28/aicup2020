@@ -301,6 +301,31 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
     handleMoves(actions);
     handleAttackActions(actions);
     handleBuilderAttackActions(actions);
+
+    for (const auto& [unitId, action] : actions) {
+        if (unitId < 0) {
+            std::cerr << "ERRROR: unitId: " << unitId << std::endl;
+        }
+        if (action.moveAction) {
+            if (action.moveAction->target.x < 0 || action.moveAction->target.x >= 80
+                || action.moveAction->target.y < 0 || action.moveAction->target.y >= 80) {
+                std::cerr << "ERRROR: move target: " << action.moveAction->target << std::endl;
+            }
+        }
+        if (action.attackAction && *action.attackAction->target < 0) {
+            std::cerr << "ERRROR: attack target: " << *action.attackAction->target << std::endl;
+        }
+        if (action.repairAction && action.repairAction->target < 0) {
+            std::cerr << "ERRROR: repair target: " << action.repairAction->target << std::endl;
+        }
+        if (action.buildAction) {
+            if (action.buildAction->position.x < 0 || action.buildAction->position.x >= 80
+                || action.buildAction->position.y < 0 || action.buildAction->position.y >= 80) {
+                std::cerr << "ERRROR: build target: " << action.buildAction->position << std::endl;
+            }
+        }
+    }
+
     this->playerView = nullptr;
     return actions;
 }
@@ -598,10 +623,17 @@ EntityAction MyStrategy::createBuildUnitAction2(const Entity& base, EntityType u
     std::vector<Vec2Int> buildPositions;
     buildPositions.reserve(20);
     for (int i = 0; i < 5; ++i) {
-        buildPositions.emplace_back(base.position.x - 1, base.position.y + i);
-        buildPositions.emplace_back(base.position.x + i, base.position.y - 1);
-        buildPositions.emplace_back(base.position.x + 5, base.position.y + i);
-        buildPositions.emplace_back(base.position.x + i, base.position.y + 5);
+        std::vector<Vec2Int> positions{
+                {base.position.x - 1, base.position.y + i},
+                {base.position.x + i, base.position.y - 1},
+                {base.position.x + 5, base.position.y + i},
+                {base.position.x + i, base.position.y + 5}
+        };
+        for (const auto& p : positions) {
+            if (checkWorldBounds(p.x, p.y)) {
+                buildPositions.push_back(p);
+            }
+        }
     }
     std::sort(buildPositions.begin(), buildPositions.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
         return std::abs(target.x - v1.x) + std::abs(target.y - v1.y)
@@ -949,24 +981,13 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
             break;
         }
     }
-//    if (topPotentials.size() >= 6) {
-//        std::cerr << "[0] tick: " << playerView.currentTick << ", score: " << topPotentials[0] << std::endl;
-//        std::cerr << "[1] tick: " << playerView.currentTick << ", score: " << topPotentials[1] << std::endl;
-//        std::cerr << "[2] tick: " << playerView.currentTick << ", score: " << topPotentials[2] << std::endl;
-//        std::cerr << "[3] tick: " << playerView.currentTick << ", score: " << topPotentials[3] << std::endl;
-//        std::cerr << "[4] tick: " << playerView.currentTick << ", score: " << topPotentials[4] << std::endl;
-//        std::cerr << "[5] tick: " << playerView.currentTick << ", score: " << topPotentials[5] << std::endl;
-//        std::cerr << "==========================================" << std::endl;
+//    std::cerr << "================== DEFENSE ===================" << std::endl;
+//    for (const auto& tp : topPotentials) {
+//        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
 //    }
-//    if (topPotentials.size() >= 6) {
-//        std::cerr << "===============ATTACK=====================" << std::endl;
-//        std::cerr << "[0] tick: " << playerView.currentTick << ", score: " << attackPotentials[0] << std::endl;
-//        std::cerr << "[1] tick: " << playerView.currentTick << ", score: " << attackPotentials[1] << std::endl;
-//        std::cerr << "[2] tick: " << playerView.currentTick << ", score: " << attackPotentials[2] << std::endl;
-//        std::cerr << "[3] tick: " << playerView.currentTick << ", score: " << attackPotentials[3] << std::endl;
-//        std::cerr << "[4] tick: " << playerView.currentTick << ", score: " << attackPotentials[4] << std::endl;
-//        std::cerr << "[5] tick: " << playerView.currentTick << ", score: " << attackPotentials[5] << std::endl;
-//        std::cerr << "==========================================" << std::endl;
+//    std::cerr << "================== ATTACK ====================" << std::endl;
+//    for (const auto& tp : attackPotentials) {
+//        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
 //    }
 }
 
@@ -1174,7 +1195,39 @@ void MyStrategy::handleMoves(Actions& actions) {
     }
 
     std::unordered_set<int> movedUnitIds;
+    std::unordered_set<Vec2Int> stuckedUnits;
     for (const auto& [priority, unitIds] : movePriorityToUnitIds) {
+        std::queue<Vec2Int> potentialStuckedQueue;
+        for (int unitId : movePriorityToUnitIds[25]) {
+            potentialStuckedQueue.push(playerView->entitiesById.at(unitId).position);
+        }
+        while (!potentialStuckedQueue.empty()) {
+            const auto& unitPos = potentialStuckedQueue.front();
+            potentialStuckedQueue.pop();
+            if (moveWorld[unitPos.x][unitPos.y] != -1) {
+                continue;
+            }
+            const auto& edges = edgesMap[unitPos.x][unitPos.y];
+            Vec2Int nextPotentialStuckedUnitPos;
+            int freeEdgesCount = 0;
+            for (const auto& edge : edges) {
+                if (moveWorld[edge.x][edge.y] == -1) {
+                    ++freeEdgesCount;
+                    nextPotentialStuckedUnitPos = edge;
+                }
+            }
+            if (freeEdgesCount == 1
+                    && !stuckedUnits.contains(unitPos)
+                    && movePriorityToUnitIds[25].contains(world(unitPos).getEntityId())) {
+                moveWorld[unitPos.x][unitPos.y] = world(unitPos).getEntityId();
+                actions[world(unitPos).getEntityId()] = MoveAction(unitPos, false, false);
+                movedUnitIds.insert(world(unitPos).getEntityId());
+//                stuckedUnits.insert(unitPos);
+                potentialStuckedQueue.push(nextPotentialStuckedUnitPos);
+            }
+        }
+
+//        if (priority == 25) {
         std::queue<int> unitsQueue;
         for (int unitId : unitIds) {
             int currentPosMovedUnitId = moveWorld[playerView->entitiesById.at(unitId).position.x][playerView->entitiesById.at(unitId).position.y];
@@ -1205,6 +1258,9 @@ void MyStrategy::handleMoves(Actions& actions) {
                 if (world(moveStep.target).turretDanger) {
                     continue;
                 }
+                if (stuckedUnits.contains(moveStep.target) && moveStep.target != playerView->entitiesById.at(unitId).position) {
+                    continue;
+                }
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
                 actions[unitId] = MoveAction(moveStep.target, false, false);
                 if (unitIds.contains(world(moveStep.target.x, moveStep.target.y).getEntityId())) {
@@ -1213,6 +1269,77 @@ void MyStrategy::handleMoves(Actions& actions) {
                 break;
             }
             movedUnitIds.insert(unitId);
+        }
+//        }
+        if (priority != 25) {
+            std::unordered_map<Vec2Int, CollisionPriority> collisionsMap;
+            std::unordered_map<EntityPtr, std::vector<Vec2Int>> potentialMoves;
+            for (int unitId : unitIds) {
+                const Entity& unit = playerView->entitiesById.at(unitId);
+                const std::vector<MoveStep>& moves = unitMoveSteps.at(unitId);
+                if (moves.empty()) {
+                    throw std::runtime_error("Moves shouldn't be empty");
+                }
+
+                std::optional<int> previousScore;
+                for (const MoveStep& moveStep : moves) {
+                    int cellValue = moveWorld[moveStep.target.x][moveStep.target.y];
+                    if (cellValue != -1) {
+                        continue;
+                    }
+                    int currentPosMovedUnitId = moveWorld[playerView->entitiesById.at(unitId).position.x][playerView->entitiesById.at(unitId).position.y];
+                    if (currentPosMovedUnitId >= 0 && playerView->entitiesById.at(currentPosMovedUnitId).position == moveStep.target) {
+                        continue;
+                    }
+                    if (world(moveStep.target).turretDanger) {
+                        continue;
+                    }
+                    if (stuckedUnits.contains(moveStep.target) && moveStep.target != playerView->entitiesById.at(unitId).position) {
+                        continue;
+                    }
+                    if (!previousScore || (*previousScore == moveStep.score && buildersWorld[moveStep.target.x][moveStep.target.y] == -1)) {
+                        if (collisionsMap.contains(moveStep.target)) {
+                            collisionsMap[moveStep.target].units.push_back(&unit);
+                        } else {
+                            collisionsMap[moveStep.target] = {moveStep.score, {&unit}, moveStep.target};
+                        }
+                        potentialMoves[&unit].push_back(moveStep.target);
+                        previousScore = moveStep.score;
+                    }
+                }
+            }
+
+            std::set<CollisionPriority> collisions;
+            for (const auto& [pos, collision] : collisionsMap) {
+                collisions.insert(collision);
+            }
+            while (!collisions.empty()) {
+                CollisionPriority collision = *collisions.begin();
+                if (collision.units.empty()) {
+                    throw std::runtime_error("Collisions are empty");
+                }
+                const Entity& unit = *collision.units[collision.units.size() - 1];
+                bool moved = false;
+                for (const auto& potentialMove : potentialMoves[&unit]) {
+                    auto iterator = collisions.find(collisionsMap[potentialMove]);
+                    if (iterator == collisions.end()) {
+                        continue;
+                    }
+                    moved = true;
+                    CollisionPriority collisionToChange = CollisionPriority(*iterator);
+                    collisions.erase(iterator);
+                    if (collisionToChange.units.size() > 1) {
+                        collisionToChange.units.erase(std::find(collisionToChange.units.begin(), collisionToChange.units.end(), &unit));
+                        collisions.insert(collisionToChange);
+                        collisionsMap[potentialMove] = collisionToChange;
+                    }
+                }
+                if (moved) {
+                    moveWorld[collision.position.x][collision.position.y] = unit.id;
+                    actions[unit.id] = MoveAction(collision.position, false, false);
+                    movedUnitIds.insert(unit.id);
+                }
+            }
         }
 
 
@@ -1224,12 +1351,12 @@ void MyStrategy::handleMoves(Actions& actions) {
             if (moves.empty()) {
                 throw std::runtime_error("Moves shouldn't be empty");
             }
-            int i = 0;
+//            int i = 0;
             for (const MoveStep& moveStep : moves) {
-                std::optional<MoveStep> nextMoveStep;
-                if (++i < moves.size()) {
-                    nextMoveStep = moves[i];
-                }
+//                std::optional<MoveStep> nextMoveStep;
+//                if (++i < moves.size()) {
+//                    nextMoveStep = moves[i];
+//                }
                 int cellValue = moveWorld[moveStep.target.x][moveStep.target.y];
                 if (cellValue != -1) {
                     continue;
@@ -1241,17 +1368,26 @@ void MyStrategy::handleMoves(Actions& actions) {
                 if (world(moveStep.target).turretDanger) {
                     continue;
                 }
+                if (stuckedUnits.contains(moveStep.target) && moveStep.target != playerView->entitiesById.at(unitId).position) {
+                    continue;
+                }
 //                if (nextMoveStep && nextMoveStep->score == moveStep.score
 //                        && buildersWorld[moveStep.target.x][moveStep.target.y] != -1
 //                        && buildersWorld[moveStep.target.x][moveStep.target.y] != unitId) {
 //                    continue;
 //                }
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
+                if (unitId == -1) {
+                    std::cerr << "ALAAARAM, unitId: " << unitId << ", target" << moveStep.target << std::endl;
+                }
                 actions[unitId] = MoveAction(moveStep.target, false, false);
                 break;
             }
             movedUnitIds.insert(unitId);
         }
+    }
+    for (const auto& stuckedPos : stuckedUnits) {
+        std::cerr << "Tick: " << playerView->currentTick << ", stucked unit pos: " << stuckedPos << std::endl;
     }
     unitMoveSteps.clear();
     movePriorityToUnitIds.clear();
@@ -1418,7 +1554,8 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
     std::unordered_set<int> brokenBuildings;
     for (const Entity& base : playerView->entities) {
         if (BUILDING_TYPES.contains(base.entityType)
-                && base.health < playerView->entityProperties.at(base.entityType).maxHealth) {
+                && base.health < playerView->entityProperties.at(base.entityType).maxHealth
+                && base.playerId == playerView->myId) {
             brokenBuildings.insert(base.id);
         }
     }
@@ -1465,8 +1602,16 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
             });
             edges.push_back(topPosition);
             std::reverse(edges.begin(), edges.end());
+            int i = 0;
             for (const auto& edge : edges) {
-                addMove(builderUnit.id, edge, enemyMap[edge.x][edge.y], topPosition == builderUnit.position ? 25 : 20);
+                int score = 0;
+                if (i++ == 0) {
+                    score = 1;
+                }
+                if (enemyMap[edge.x][edge.y] <= 6) {
+                    score = -1;
+                }
+                addMove(builderUnit.id, edge, score, 25);
             }
         }
     }
@@ -1497,7 +1642,7 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
                 return bfsResult[v1.x][v1.y] < bfsResult[v2.x][v2.y];
             });
             for (const auto& edge : edges) {
-                addMove(builderId, edge, enemyMap[edge.x][edge.y], 20);
+                addMove(builderId, edge, bfsResult[edge.x][edge.y], 20);
             }
             busyBuilders.insert(builderId);
         }
@@ -1639,20 +1784,14 @@ void MyStrategy::setRunningFromEnemyBuilders(std::unordered_set<int>& busyBuilde
                     || enemy.entityType == MELEE_UNIT && distId.distance <= 3) {
                 std::vector<Vec2Int> edges = getEdges(builderUnit.position, true);
                 std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
-                    return dist(v1, enemy.position) < dist(v2, enemy.position);
+                    return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
                 });
                 std::reverse(edges.begin(), edges.end());
                 for (const auto& edge : edges) {
-                    addMove(builderUnit.id, edge, dist(edge, enemy.position), 1);
+                    addMove(builderUnit.id, edge, enemyMap[edge.x][edge.y], 1);
                 }
                 busyBuilders.insert(builderUnit.id);
-//                for () {
-//                    if (world(edge).isEmpty() && dist(edge, enemy.position) > distId.distance) {
-//                        actions[builderUnit.id] = MoveAction({edge.x, edge.y}, false, false);
-//
-//                        break;
-//                    }
-//                }
+                isAfraidEnemy = true;
             }
             if (isAfraidEnemy || distId.distance > 7) {
                 break;
@@ -1694,19 +1833,15 @@ void MyStrategy::setFarmers(std::unordered_set<int>& busyBuilders, Actions& acti
         }
 
         if (isFarmer) {
-//            std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
-//                if (enemyMap[v1.x][v1.y] <= 6) {
-//                    return true;
-//                }
-//                if (enemyMap[v2.x][v2.y] <= 6) {
-//                    return true;
-//                }
-//                return true;
-//            });
             edges.push_back(builderUnit.position);
             std::reverse(edges.begin(), edges.end());
+            int i = 0;
             for (const auto& edge : edges) {
-                addMove(builderUnit.id, edge, enemyMap[edge.x][edge.y], 25);
+                int score = 0;
+                if (i++ == 0) {
+                    score = 1;
+                }
+                addMove(builderUnit.id, edge, score, 25);
             }
         }
     }
@@ -1771,7 +1906,7 @@ void MyStrategy::setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions&
         std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
             return bfsResults.at(targetPosition)[v1.x][v1.y] < bfsResults.at(targetPosition)[v2.x][v2.y];
         });
-        for (const auto &edge : edges) {
+        for (const auto& edge : edges) {
             addMove(builderPtr->id, edge, bfsResults.at(target)[edge.x][edge.y], 20);
         }
     }
