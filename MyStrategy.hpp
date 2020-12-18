@@ -158,6 +158,8 @@ struct CollisionPriority {
         }
         return position < other.position;
     }
+
+    friend std::ostream& operator<<(std::ostream& out, const CollisionPriority& score);
 };
 
 class MyStrategy {

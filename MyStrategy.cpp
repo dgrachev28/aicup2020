@@ -303,6 +303,16 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
     handleBuilderAttackActions(actions);
 
     for (const auto& [unitId, action] : actions) {
+//        if (playerView.entitiesById.at(unitId).position.x > 30 && playerView.entitiesById.at(unitId).position.y > 30
+//                && playerView.entitiesById.at(unitId).entityType == RANGED_UNIT) {
+//            std::cerr << "unitId: " << unitId << std::endl;
+//            if (action.moveAction) {
+//                std::cerr << "move target: " << action.moveAction->target << std::endl;
+//            }
+//            if (action.attackAction) {
+//                std::cerr << "attack target: " << *action.attackAction->target << std::endl;
+//            }
+//        }
         if (unitId < 0) {
             std::cerr << "ERRROR: unitId: " << unitId << std::endl;
         }
@@ -1173,6 +1183,7 @@ void MyStrategy::addMove(int unitId, const Vec2Int& target, int score, int prior
 }
 
 void MyStrategy::handleMoves(Actions& actions) {
+    std::unordered_set<int> debugUnits;
     static std::unordered_set<EntityType> UNITS = {MELEE_UNIT, RANGED_UNIT, BUILDER_UNIT};
     std::array<std::array<int, 80>, 80> moveWorld;
     std::array<std::array<int, 80>, 80> buildersWorld;
@@ -1227,7 +1238,6 @@ void MyStrategy::handleMoves(Actions& actions) {
             }
         }
 
-//        if (priority == 25) {
         std::queue<int> unitsQueue;
         for (int unitId : unitIds) {
             int currentPosMovedUnitId = moveWorld[playerView->entitiesById.at(unitId).position.x][playerView->entitiesById.at(unitId).position.y];
@@ -1270,11 +1280,13 @@ void MyStrategy::handleMoves(Actions& actions) {
             }
             movedUnitIds.insert(unitId);
         }
-//        }
         if (priority != 25) {
             std::unordered_map<Vec2Int, CollisionPriority> collisionsMap;
             std::unordered_map<EntityPtr, std::vector<Vec2Int>> potentialMoves;
             for (int unitId : unitIds) {
+                if (movedUnitIds.count(unitId)) {
+                    continue;
+                }
                 const Entity& unit = playerView->entitiesById.at(unitId);
                 const std::vector<MoveStep>& moves = unitMoveSteps.at(unitId);
                 if (moves.empty()) {
@@ -1314,7 +1326,7 @@ void MyStrategy::handleMoves(Actions& actions) {
                 collisions.insert(collision);
             }
             while (!collisions.empty()) {
-                CollisionPriority collision = *collisions.begin();
+                CollisionPriority collision = CollisionPriority(*collisions.begin());
                 if (collision.units.empty()) {
                     throw std::runtime_error("Collisions are empty");
                 }
@@ -1337,11 +1349,16 @@ void MyStrategy::handleMoves(Actions& actions) {
                 if (moved) {
                     moveWorld[collision.position.x][collision.position.y] = unit.id;
                     actions[unit.id] = MoveAction(collision.position, false, false);
+                    if (debugUnits.contains(unit.id)) {
+                        std::cerr << "DEBBUUUG MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
+                    }
+                    if (priority < 2) {
+                        debugUnits.insert(unit.id);
+                    }
                     movedUnitIds.insert(unit.id);
                 }
             }
         }
-
 
         for (int unitId : unitIds) {
             if (movedUnitIds.count(unitId)) {
@@ -1351,12 +1368,7 @@ void MyStrategy::handleMoves(Actions& actions) {
             if (moves.empty()) {
                 throw std::runtime_error("Moves shouldn't be empty");
             }
-//            int i = 0;
             for (const MoveStep& moveStep : moves) {
-//                std::optional<MoveStep> nextMoveStep;
-//                if (++i < moves.size()) {
-//                    nextMoveStep = moves[i];
-//                }
                 int cellValue = moveWorld[moveStep.target.x][moveStep.target.y];
                 if (cellValue != -1) {
                     continue;
@@ -1371,15 +1383,7 @@ void MyStrategy::handleMoves(Actions& actions) {
                 if (stuckedUnits.contains(moveStep.target) && moveStep.target != playerView->entitiesById.at(unitId).position) {
                     continue;
                 }
-//                if (nextMoveStep && nextMoveStep->score == moveStep.score
-//                        && buildersWorld[moveStep.target.x][moveStep.target.y] != -1
-//                        && buildersWorld[moveStep.target.x][moveStep.target.y] != unitId) {
-//                    continue;
-//                }
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
-                if (unitId == -1) {
-                    std::cerr << "ALAAARAM, unitId: " << unitId << ", target" << moveStep.target << std::endl;
-                }
                 actions[unitId] = MoveAction(moveStep.target, false, false);
                 break;
             }
@@ -1947,6 +1951,11 @@ std::ostream& operator<<(std::ostream& out, const PotentialCell& cell) {
 
 std::ostream& operator<<(std::ostream& out, const Vec2Int& cell) {
     out << "{ x: " << cell.x << ", y: " << cell.y << " }";
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, const CollisionPriority& collisionPriority) {
+    out << "{ target: " << collisionPriority.position << ", units: " << collisionPriority.units.size() << " }";
     return out;
 }
 
