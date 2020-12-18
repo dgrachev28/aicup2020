@@ -45,13 +45,13 @@ def worker(args):
     # return
     config = {
         "game": {
-            "Create": "Finals"
+            "Create": "Round2"
         },
         "players": [
             get_player_config(port1),
             get_player_config(port2),
-            # get_player_config(port3),
-            # get_player_config(port4)
+            get_player_config(port3),
+            get_player_config(port4)
         ],
         "seed": seed
     }
@@ -66,12 +66,13 @@ def worker(args):
         os.remove(result_path)
 
     try:
-        with subprocess.Popen(f"{lr_bin} --batch-mode --config {config_path} --save-results {result_path} --log-level warn".split(" ")) as process:
+        with subprocess.Popen(f"{lr_bin} --config {config_path} --save-results {result_path} --log-level warn".split(" ")) as process:
             time.sleep(1.0)
-            subprocess.Popen([p1, "127.0.0.1", str(port1), "0000000000000000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.Popen([p2, "127.0.0.1", str(port2), "0000000000000000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            # subprocess.Popen([p2, "127.0.0.1", str(port3), "0000000000000000"], stdout=subprocess.DEVNULL)
-            # subprocess.Popen([p2, "127.0.0.1", str(port4), "0000000000000000"], stdout=subprocess.DEVNULL)
+            subprocess.Popen([p1, "127.0.0.1", str(port1), "0000000000000000"], stdout=subprocess.DEVNULL)
+            subprocess.Popen([p2, "127.0.0.1", str(port2), "0000000000000000"], stdout=subprocess.DEVNULL)
+            subprocess.Popen([p2, "127.0.0.1", str(port3), "0000000000000000"], stdout=subprocess.DEVNULL)
+            subprocess.Popen([p2, "127.0.0.1", str(port4), "0000000000000000"], stdout=subprocess.DEVNULL)
+            print("Waiting process...")
             process.wait()
             if os.path.exists(result_path):
                 with open(result_path) as result_inp:

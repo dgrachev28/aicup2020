@@ -303,14 +303,13 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
     handleBuilderAttackActions(actions);
 
     for (const auto& [unitId, action] : actions) {
-//        if (playerView.entitiesById.at(unitId).position.x > 30 && playerView.entitiesById.at(unitId).position.y > 30
+//        if (playerView.entitiesById.at(unitId).position.x > 30
 //                && playerView.entitiesById.at(unitId).entityType == RANGED_UNIT) {
-//            std::cerr << "unitId: " << unitId << std::endl;
 //            if (action.moveAction) {
-//                std::cerr << "move target: " << action.moveAction->target << std::endl;
+//                std::cerr << "unitId: " << unitId << ", move target: " << action.moveAction->target << std::endl;
 //            }
 //            if (action.attackAction) {
-//                std::cerr << "attack target: " << *action.attackAction->target << std::endl;
+//                std::cerr << "unitId: " << unitId << ", attack target: " << *action.attackAction->target << std::endl;
 //            }
 //        }
         if (unitId < 0) {
@@ -788,11 +787,10 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
         });
 
         if (world(edges[0]).eqEntityType(RESOURCE)) {
-            actions[unit.id] = AttackAction(world(edges[0]).getEntityId());
-        } else {
-            for (const auto& edge : edges) {
-                addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
-            }
+            builderAttackActions[unit.id] = AttackAction(world(edges[0]).getEntityId());
+        }
+        for (const auto& edge : edges) {
+            addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
         }
     }
 
@@ -1155,6 +1153,8 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
                 afraid = false;
             }
         }
+//        afraid = (my0 + my1 + my2 <= enemy0 + enemy1 + enemy2 && enemy0 + enemy1 + enemy2 > 0)
+//                 || (my0 + my1 <= enemy0 + enemy1 && enemy0 + enemy1 > 0);
 
         if (afraid) {
             for (const auto& [unitId, distance] : group) {
@@ -1247,6 +1247,9 @@ void MyStrategy::handleMoves(Actions& actions) {
         }
         while (!unitsQueue.empty()) {
             int unitId = unitsQueue.front();
+            if (priority == 10) {
+                std::cerr << "Tick: " << playerView->currentTick << ", unitId: " << unitId << std::endl;
+            }
             unitsQueue.pop();
 
             if (movedUnitIds.count(unitId)) {
@@ -1273,6 +1276,9 @@ void MyStrategy::handleMoves(Actions& actions) {
                 }
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
                 actions[unitId] = MoveAction(moveStep.target, false, false);
+                if (priority == 10) {
+                    std::cerr << "prior 10 QUEUE move: " << moveStep.target << ", unit_pos: " << playerView->entitiesById.at(unitId).position << ", unit_id: " << unitId << std::endl;
+                }
                 if (unitIds.contains(world(moveStep.target.x, moveStep.target.y).getEntityId())) {
                     unitsQueue.push(world(moveStep.target.x, moveStep.target.y).getEntityId());
                 }
@@ -1324,6 +1330,9 @@ void MyStrategy::handleMoves(Actions& actions) {
             std::set<CollisionPriority> collisions;
             for (const auto& [pos, collision] : collisionsMap) {
                 collisions.insert(collision);
+                if (priority < 2) {
+                    std::cerr << "Tick: " << playerView->currentTick << ", collision: " << collision << std::endl;
+                }
             }
             while (!collisions.empty()) {
                 CollisionPriority collision = CollisionPriority(*collisions.begin());
@@ -1354,6 +1363,11 @@ void MyStrategy::handleMoves(Actions& actions) {
                     }
                     if (priority < 2) {
                         debugUnits.insert(unit.id);
+                        std::cerr << "MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
+                    }
+                    if (priority == 10) {
+                        debugUnits.insert(unit.id);
+                        std::cerr << "prior 10 MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
                     }
                     movedUnitIds.insert(unit.id);
                 }
