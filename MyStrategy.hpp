@@ -135,6 +135,10 @@ struct Scout {
     int unitId;
 };
 
+enum class MicroState {
+    ATTACK, STAY, RUN_AWAY
+};
+
 struct CollisionPriority {
     int score;
     std::vector<EntityPtr> units;

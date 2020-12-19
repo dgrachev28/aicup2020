@@ -1142,29 +1142,52 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
 //                  << ", my1: " << my1 << ", enemy1: " << enemy1
 //                  << ", my2: " << my2 << ", enemy2: " << enemy2
 //                  << std::endl;
-        bool afraid;
-        if (avgPosition < 50) {
-            afraid = (my0 + my1 + my2 < enemy0 + enemy1 + enemy2 && enemy0 + enemy1 + enemy2 > 0)
-                     || (my0 + my1 < enemy0 + enemy1 && enemy0 + enemy1 > 0);
+        MicroState microState;
+        if (my1 > enemy1 + enemy2) {
+            microState = MicroState::ATTACK;
+        } else if (my1 * 2 + my2 >= enemy1 * 2 + enemy2) {
+            microState = MicroState::STAY;
         } else {
-            afraid = (my0 + my1 + my2 <= enemy0 + enemy1 + enemy2 && enemy0 + enemy1 + enemy2 > 0)
-                     || (my0 + my1 <= enemy0 + enemy1 && enemy0 + enemy1 > 0);
-            if (my0 + my1 == enemy0 + enemy1 && (my0 + my1 + my2 > enemy0 + enemy1 + enemy2)) {
-                afraid = false;
-            }
+            microState = MicroState::RUN_AWAY;
         }
-//        afraid = (my0 + my1 + my2 <= enemy0 + enemy1 + enemy2 && enemy0 + enemy1 + enemy2 > 0)
-//                 || (my0 + my1 <= enemy0 + enemy1 && enemy0 + enemy1 > 0);
 
-        if (afraid) {
+        if (microState == MicroState::RUN_AWAY) {
             for (const auto& [unitId, distance] : group) {
                 const Entity& unit = playerView->entitiesById.at(unitId);
-                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] > 5) {
+                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] == 6) {
                     std::vector<Vec2Int> edges = getEdges(unit.position, true);
                     std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
                         return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
                     });
                     std::reverse(edges.begin(), edges.end());
+                    for (const auto& edge : edges) {
+                        addMove(unit.id, edge, enemyMap[edge.x][edge.y], 1);
+                    }
+                }
+                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] == 7) {
+                    std::vector<Vec2Int> edges = getEdges(unit.position, false);
+                    std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+                        return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
+                    });
+                    std::reverse(edges.begin(), edges.end());
+
+                    addMove(unit.id, unit.position, 10, 1);
+                    for (const auto& edge : edges) {
+                        addMove(unit.id, edge, enemyMap[edge.x][edge.y], 2);
+                    }
+                }
+            }
+        } else if (microState == MicroState::STAY) {
+            for (const auto& [unitId, distance] : group) {
+                const Entity& unit = playerView->entitiesById.at(unitId);
+                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] == 6) {
+                    std::vector<Vec2Int> edges = getEdges(unit.position, false);
+                    std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+                        return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
+                    });
+                    std::reverse(edges.begin(), edges.end());
+
+                    addMove(unit.id, unit.position, 10, 1);
                     for (const auto& edge : edges) {
                         addMove(unit.id, edge, enemyMap[edge.x][edge.y], 1);
                     }
