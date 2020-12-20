@@ -45,6 +45,12 @@ struct DistId {
     }
 };
 
+struct DistPositionId {
+    int distance;
+    Vec2Int position;
+    int entityId;
+};
+
 struct PotentialCell {
     Score score;
     int x;
@@ -166,6 +172,12 @@ struct CollisionPriority {
     friend std::ostream& operator<<(std::ostream& out, const CollisionPriority& score);
 };
 
+struct PotentialBuilder {
+    int unitId;
+    float score;
+    Vec2Int position;
+};
+
 class MyStrategy {
 public:
     const PlayerView* playerView;
@@ -237,9 +249,14 @@ private:
             int valuePlayerId
     );
 
+    // Building buildings :)
     bool checkBuilderUnit(int x, int y, const std::unordered_set<int>& busyBuilders);
 
-    int isEmptyForHouse(int x, int y, int size, const std::unordered_set<int>& busyBuilders);
+    int calcBlockingFarmScore(int x, int y, int size);
+    PotentialBuilder calcBuildingPlaceScore(int x, int y, int size, const std::unordered_set<int>& busyBuilders);
+    bool isEmptyForHouse(int x, int y, int size, const std::unordered_set<int>& busyBuilders);
+
+    // End of Building buildings
 
     EntityAction createBuildUnitAction(const Entity& base, EntityType unitType);
     EntityAction createBuildUnitAction2(const Entity& base, EntityType unitType, const Vec2Int& target);
@@ -294,6 +311,7 @@ private:
     void setFarmers(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions& actions);
 
+    std::vector<Vec2Int> getBuildingEdges(const Vec2Int& position, int size, bool areUnitsEmpty);
     std::vector<Vec2Int> getBuildingEdges(int buildingId);
 };
 
