@@ -207,8 +207,9 @@ public:
     std::unordered_map<int, Vec2Int> lastTargetPositions;
 
     std::unordered_set<Vec2Int> freeScoutSpots;
-//    std::vector<Scout> scouts;
     std::unordered_map<int, Vec2Int> scouts;
+
+    bool isFinal;
 
     MyStrategy();
     Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);

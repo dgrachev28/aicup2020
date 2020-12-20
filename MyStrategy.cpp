@@ -285,7 +285,6 @@ MyStrategy::MyStrategy() {
             }
         }
     }
-    freeScoutSpots = {{9, 70}, {70, 9}, {70, 70}};
 }
 
 Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debugInterface) {
@@ -340,13 +339,15 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
 }
 
 void MyStrategy::stepInit(const PlayerView& playerView) {
+    isFinal = playerView.players.size() == 2;
+
     int anyEnemyId;
     for (const Player& player : playerView.players) {
         if (player.id != playerView.myId) {
             anyEnemyId = player.id;
         }
     }
-//    myToMyMapping = calculateDistances(playerView, playerView.myId, playerView.myId);
+    myToMyMapping = calculateDistances(playerView, playerView.myId, playerView.myId);
     myToEnemyMapping = calculateDistances(playerView, playerView.myId, anyEnemyId);
     enemyToMyMapping = calculateDistances(playerView, anyEnemyId, playerView.myId);
     enemyToEnemyMapping = calculateDistances(playerView, anyEnemyId, anyEnemyId);
@@ -437,16 +438,30 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
     } else {
         int maxBuildersCount;
         int maxRangedCount;
-        if (playerView.playersById.at(playerView.myId).resource < 500) {
-            maxRangedCount = 40;
-            maxBuildersCount = 50;
-        } else if (playerView.playersById.at(playerView.myId).resource < 1000) {
-            maxRangedCount = 45;
-            maxBuildersCount = 60;
+        if (isFinal) {
+            if (playerView.playersById.at(playerView.myId).resource < 500) {
+                maxRangedCount = 40;
+                maxBuildersCount = 70;
+            } else if (playerView.playersById.at(playerView.myId).resource < 1000) {
+                maxRangedCount = 45;
+                maxBuildersCount = 80;
+            } else {
+                maxRangedCount = 80;
+                maxBuildersCount = 80;
+            }
         } else {
-            maxRangedCount = 100;
-            maxBuildersCount = 60;
+            if (playerView.playersById.at(playerView.myId).resource < 500) {
+                maxRangedCount = 40;
+                maxBuildersCount = 50;
+            } else if (playerView.playersById.at(playerView.myId).resource < 1000) {
+                maxRangedCount = 45;
+                maxBuildersCount = 60;
+            } else {
+                maxRangedCount = 150;
+                maxBuildersCount = 60;
+            }
         }
+
         if (!topPotentials.empty()) {
             if (topPotentials[0].score.score > 85.0) {
                 maxBuildersCount = 5;
@@ -694,6 +709,12 @@ EntityAction MyStrategy::createBuildUnitAction2(const Entity& base, EntityType u
 void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& actions) {
     const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
     if (playerView.fogOfWar) {
+        if (scouts.empty() && freeScoutSpots.empty()) {
+//            if (isFinal) {
+//                freeScoutSpots = {{70, 70}};
+//            }
+            freeScoutSpots = {{9, 70}, {70, 9}, {70, 70}};
+        }
         std::vector<int> scoutsToRemove;
         for (const auto& [unitId, target] : scouts) {
             if (!playerView.entitiesById.count(unitId)) {
@@ -775,7 +796,11 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //                  << "), distance: " << minEnemyDist << std::endl;
         Vec2Int targetPosition = {19, 19};
         if (playerView.fogOfWar) {
-            targetPosition = {9, 70};
+            if (isFinal) {
+                targetPosition = {70, 70};
+            } else {
+                targetPosition = {9, 70};
+            }
         }
         if ((playerView.currentTick > 100 || minEnemyDist < 30) && minEnemyId != -1) {
             if (defenders.count(unit.id)) {
@@ -1171,19 +1196,46 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
         if (!group.empty()) {
             avgPosition /= group.size();
         }
+        int minDefenseDist = 10000;
+        int groupMyUnitId = -1;
+        for (const auto& [unitId, distance] : group) {
+            if (playerView->entitiesById.at(unitId).playerId == playerView->myId) {
+                groupMyUnitId = unitId;
+            }
+        }
+        if (groupMyUnitId != -1) {
+            for (const DistId& distId : myToMyMapping.at(groupMyUnitId)) {
+                EntityType type = playerView->entitiesById.at(distId.entityId).entityType;
+                if (type == BUILDER_UNIT || type == HOUSE || type == BUILDER_BASE || type == RANGED_BASE) {
+                    minDefenseDist = distId.distance;
+                    break;
+                }
+            }
+        }
 //        std::cerr << "current tick: " << playerView->currentTick << ", group size: " << group.size()
 //                  << ", my0: " << my0 << ", enemy0: " << enemy0
 //                  << ", my1: " << my1 << ", enemy1: " << enemy1
 //                  << ", my2: " << my2 << ", enemy2: " << enemy2
 //                  << std::endl;
         MicroState microState;
-        if (my1 > enemy1 + enemy2) {
-            microState = MicroState::ATTACK;
-        } else if (my1 * 2 + my2 >= enemy1 * 2 + enemy2) {
-            microState = MicroState::STAY;
+        if (minDefenseDist < 10) {
+            if (my1 >= enemy1 + enemy2) {
+                microState = MicroState::ATTACK;
+            } else if (my1 * 2 + my2 >= enemy1 * 2 + enemy2) {
+                microState = MicroState::STAY;
+            } else {
+                microState = MicroState::RUN_AWAY;
+            }
         } else {
-            microState = MicroState::RUN_AWAY;
+            if (my1 > enemy1 + enemy2) {
+                microState = MicroState::ATTACK;
+            } else if (my1 * 2 + my2 > enemy1 * 2 + enemy2) {
+                microState = MicroState::STAY;
+            } else {
+                microState = MicroState::RUN_AWAY;
+            }
         }
+
 
         if (microState == MicroState::RUN_AWAY) {
             for (const auto& [unitId, distance] : group) {
@@ -1415,17 +1467,17 @@ void MyStrategy::handleMoves(Actions& actions) {
                 if (moved) {
                     moveWorld[collision.position.x][collision.position.y] = unit.id;
                     actions[unit.id] = MoveAction(collision.position, false, false);
-                    if (debugUnits.contains(unit.id)) {
-                        std::cerr << "DEBBUUUG MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
-                    }
-                    if (priority < 2) {
-                        debugUnits.insert(unit.id);
-                        std::cerr << "MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
-                    }
-                    if (priority == 10) {
-                        debugUnits.insert(unit.id);
-                        std::cerr << "prior 10 MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
-                    }
+//                    if (debugUnits.contains(unit.id)) {
+//                        std::cerr << "DEBBUUUG MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
+//                    }
+//                    if (priority < 2) {
+//                        debugUnits.insert(unit.id);
+//                        std::cerr << "MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
+//                    }
+//                    if (priority == 10) {
+//                        debugUnits.insert(unit.id);
+//                        std::cerr << "prior 10 MOVE_ACTION Collision: " << collision << ", unit_pos: " << unit.position << ", unit_id: " << unit.id << std::endl;
+//                    }
                     movedUnitIds.insert(unit.id);
                 }
             }
@@ -1753,9 +1805,9 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
                 const PotentialBuilder& builder = calcBuildingPlaceScore(position.x, position.y, 2, busyBuilders);
                 if (builder.unitId != -1) {
                     potentialBuilders.push_back(builder);
+                    buildType = RANGED_BASE;
+                    buildingSize = 2;
                 }
-                buildType = RANGED_BASE;
-                buildingSize = 2;
             }
         }
     }
