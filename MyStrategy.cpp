@@ -388,7 +388,7 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
                     ++myRangedCount;
                 }
             }
-            if (myRangedCount < 6) {
+            if (myRangedCount < 8) {
                 for (int i = entity.position.x - 5; i <= entity.position.x + 6; ++i) {
                     for (int j = entity.position.y - 5; j <= entity.position.y + 6; ++j) {
                         if (!checkWorldBounds(i, j)) {
@@ -710,10 +710,11 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
     const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
     if (playerView.fogOfWar) {
         if (scouts.empty() && freeScoutSpots.empty()) {
-//            if (isFinal) {
-//                freeScoutSpots = {{70, 70}};
-//            }
-            freeScoutSpots = {{9, 70}, {70, 9}, {70, 70}};
+            if (isFinal) {
+                freeScoutSpots = {{70, 70}};
+            } else {
+                freeScoutSpots = {{9, 70}, {70, 9}, {70, 70}};
+            }
         }
         std::vector<int> scoutsToRemove;
         for (const auto& [unitId, target] : scouts) {
@@ -1217,19 +1218,21 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
 //                  << ", my1: " << my1 << ", enemy1: " << enemy1
 //                  << ", my2: " << my2 << ", enemy2: " << enemy2
 //                  << std::endl;
+        int myPower = my0 * 2 + my1 * 2 + my2;
+        int enemyPower = enemy0 * 2 + enemy1 * 2 + enemy2;
         MicroState microState;
         if (minDefenseDist < 10) {
-            if (my1 >= enemy1 + enemy2) {
+            if (myPower >= enemyPower + 1) {
                 microState = MicroState::ATTACK;
-            } else if (my1 * 2 + my2 >= enemy1 * 2 + enemy2) {
+            } else if (myPower >= enemyPower) {
                 microState = MicroState::STAY;
             } else {
                 microState = MicroState::RUN_AWAY;
             }
         } else {
-            if (my1 > enemy1 + enemy2) {
+            if (myPower >= enemyPower + 2) {
                 microState = MicroState::ATTACK;
-            } else if (my1 * 2 + my2 > enemy1 * 2 + enemy2) {
+            } else if (myPower > enemyPower) {
                 microState = MicroState::STAY;
             } else {
                 microState = MicroState::RUN_AWAY;
@@ -1317,35 +1320,35 @@ void MyStrategy::handleMoves(Actions& actions) {
     std::unordered_set<int> movedUnitIds;
     std::unordered_set<Vec2Int> stuckedUnits;
     for (const auto& [priority, unitIds] : movePriorityToUnitIds) {
-        std::queue<Vec2Int> potentialStuckedQueue;
-        for (int unitId : movePriorityToUnitIds[25]) {
-            potentialStuckedQueue.push(playerView->entitiesById.at(unitId).position);
-        }
-        while (!potentialStuckedQueue.empty()) {
-            const auto& unitPos = potentialStuckedQueue.front();
-            potentialStuckedQueue.pop();
-            if (moveWorld[unitPos.x][unitPos.y] != -1) {
-                continue;
-            }
-            const auto& edges = edgesMap[unitPos.x][unitPos.y];
-            Vec2Int nextPotentialStuckedUnitPos;
-            int freeEdgesCount = 0;
-            for (const auto& edge : edges) {
-                if (moveWorld[edge.x][edge.y] == -1) {
-                    ++freeEdgesCount;
-                    nextPotentialStuckedUnitPos = edge;
-                }
-            }
-            if (freeEdgesCount == 1
-                    && !stuckedUnits.contains(unitPos)
-                    && movePriorityToUnitIds[25].contains(world(unitPos).getEntityId())) {
-                moveWorld[unitPos.x][unitPos.y] = world(unitPos).getEntityId();
-                actions[world(unitPos).getEntityId()] = MoveAction(unitPos, false, false);
-                movedUnitIds.insert(world(unitPos).getEntityId());
-//                stuckedUnits.insert(unitPos);
-                potentialStuckedQueue.push(nextPotentialStuckedUnitPos);
-            }
-        }
+//        std::queue<Vec2Int> potentialStuckedQueue;
+//        for (int unitId : movePriorityToUnitIds[25]) {
+//            potentialStuckedQueue.push(playerView->entitiesById.at(unitId).position);
+//        }
+//        while (!potentialStuckedQueue.empty()) {
+//            const auto& unitPos = potentialStuckedQueue.front();
+//            potentialStuckedQueue.pop();
+//            if (moveWorld[unitPos.x][unitPos.y] != -1) {
+//                continue;
+//            }
+//            const auto& edges = edgesMap[unitPos.x][unitPos.y];
+//            Vec2Int nextPotentialStuckedUnitPos;
+//            int freeEdgesCount = 0;
+//            for (const auto& edge : edges) {
+//                if (moveWorld[edge.x][edge.y] == -1) {
+//                    ++freeEdgesCount;
+//                    nextPotentialStuckedUnitPos = edge;
+//                }
+//            }
+//            if (freeEdgesCount == 1
+//                    && !stuckedUnits.contains(unitPos)
+//                    && movePriorityToUnitIds[25].contains(world(unitPos).getEntityId())) {
+//                moveWorld[unitPos.x][unitPos.y] = world(unitPos).getEntityId();
+//                actions[world(unitPos).getEntityId()] = MoveAction(unitPos, false, false);
+//                movedUnitIds.insert(world(unitPos).getEntityId());
+////                stuckedUnits.insert(unitPos);
+//                potentialStuckedQueue.push(nextPotentialStuckedUnitPos);
+//            }
+//        }
 
         std::queue<int> unitsQueue;
         for (int unitId : unitIds) {
