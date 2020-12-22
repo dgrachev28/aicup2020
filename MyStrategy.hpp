@@ -86,6 +86,8 @@ struct Cell {
 
     // флаг, что рабочий стоит около ресурса, чтобы учитывать его при построении пути дейкстрой
     bool farmBuilder = false;
+    int myBuildingsBfs = 100000;
+    int resourcesBfs = 100000;
 
     bool isEmpty() const {
         return entity == nullptr;

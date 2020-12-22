@@ -381,12 +381,20 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
             world(i, j) = {i, j};
         }
     }
+    std::vector<Vec2Int> resourcesBfsPositions;
+    std::vector<Vec2Int> myBuildingsBfsPositions;
     for (auto& entity : playerView.entities) {
         const EntityProperties& properties = playerView.entityProperties.at(entity.entityType);
         for (int i = entity.position.x; i < entity.position.x + properties.size; ++i) {
             for (int j = entity.position.y; j < entity.position.y + properties.size; ++j) {
                 world(i, j).entity = &entity;
+                if ((entity.entityType == HOUSE || entity.entityType == RANGED_BASE) && entity.playerId == playerView.myId && !entity.active) {
+                    myBuildingsBfsPositions.emplace_back(i, j);
+                }
             }
+        }
+        if (entity.entityType == RESOURCE) {
+            resourcesBfsPositions.push_back(entity.position);
         }
         if (entity.entityType == BUILDER_UNIT && entity.playerId == playerView.myId) {
             for (const auto& edge : edgesMap[entity.position.x][entity.position.y]) {
@@ -424,6 +432,15 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
                     }
                 }
             }
+        }
+    }
+
+    const auto& myBuildingsBfs = bfs(myBuildingsBfsPositions);
+    const auto& resourcesBfs = bfs(resourcesBfsPositions);
+    for (int i = 0; i < 80; ++i) {
+        for (int j = 0; j < 80; ++j) {
+            world(i, j).myBuildingsBfs = myBuildingsBfs[i][j];
+            world(i, j).resourcesBfs = resourcesBfs[i][j];
         }
     }
 }
@@ -644,6 +661,7 @@ PotentialBuilder MyStrategy::calcBuildingPlaceScore(int x, int y, int size, cons
     const auto& startCells = getBuildingEdges({x - size, y - size}, size * 2 + 1, true);
     int maxUnitsCount = size == 2 ? 6 : 3;
     int maxEmptyDistance = size == 2 ? 7 : 5;
+    int maxDistance = 10;
 
     std::array<std::array<int, 80>, 80> d;
         for (int i = 0; i < 80; ++i) {
@@ -665,7 +683,7 @@ PotentialBuilder MyStrategy::calcBuildingPlaceScore(int x, int y, int size, cons
         if (world(v).eqEntityType(BUILDER_UNIT) && world(v).eqPlayerId(playerView->myId) && !busyBuilders.contains(world(v).getEntityId())) {
             closestUnits.push_back({d[v.x][v.y], v, world(v).getEntityId()});
         }
-        if (closestUnits.size() >= maxUnitsCount || (closestUnits.empty() && d[v.x][v.y] > maxEmptyDistance) || d[v.x][v.y] > 10) {
+        if (closestUnits.size() >= maxUnitsCount || (closestUnits.empty() && d[v.x][v.y] > maxEmptyDistance) || d[v.x][v.y] > maxDistance) {
             break;
         }
         const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
@@ -684,7 +702,10 @@ PotentialBuilder MyStrategy::calcBuildingPlaceScore(int x, int y, int size, cons
     for (const auto& distId : closestUnits) {
         score += static_cast<float>(distId.distance);
     }
-    score /= closestUnits.size();
+    for (int i = closestUnits.size(); i < maxUnitsCount; ++i) {
+        score += maxDistance;
+    }
+    score /= maxUnitsCount;
 //    score *= 2;
 //    score += static_cast<float>(x + y);
     return {closestUnits[0].entityId, score, {x, y}};
@@ -1804,42 +1825,17 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
                 ++repairersCounts[world(edge).getEntityId()];
                 isRepairer = true;
                 break;
-            } else if (world(edge).isEmpty()) {
-//                const auto& edgesOfEdge = getEdges(edge);
-//                for (const auto& e : edgesOfEdge) {
-//                    if (brokenBuildings.count(world(e).getEntityId())) {
-//                        busyBuilders.insert(builderUnit.id);
-//                        topPosition = edge;
-//                        isRepairer = true;
-////                        actions[builderUnit.id] = MoveAction({edge.x, edge.y}, false, false);
-//                        break;
-//                    }
-//                }
             }
         }
         if (isRepairer) {
             edges.erase(std::find(edges.begin(), edges.end(), topPosition));
             std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
-                if (enemyMap[v1.x][v1.y] <= 6) {
-                    return true;
-                }
-                if (enemyMap[v2.x][v2.y] <= 6) {
-                    return false;
-                }
-                return true;
+                return world(v1).myBuildingsBfs > world(v2).myBuildingsBfs;
             });
             edges.push_back(topPosition);
             std::reverse(edges.begin(), edges.end());
-            int i = 0;
             for (const auto& edge : edges) {
-                int score = 0;
-                if (i++ == 0) {
-                    score = 1;
-                }
-                if (enemyMap[edge.x][edge.y] <= 6) {
-                    score = -1;
-                }
-                addMove(builderUnit.id, edge, score, 25);
+                addMove(builderUnit.id, edge, world(edge).myBuildingsBfs, 25);
             }
         }
     }
@@ -2030,15 +2026,13 @@ void MyStrategy::setFarmers(std::unordered_set<int>& busyBuilders, Actions& acti
         }
 
         if (isFarmer) {
+            std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+                return world(v1).resourcesBfs > world(v2).resourcesBfs;
+            });
             edges.push_back(builderUnit.position);
             std::reverse(edges.begin(), edges.end());
-            int i = 0;
             for (const auto& edge : edges) {
-                int score = 0;
-                if (i++ == 0) {
-                    score = 1;
-                }
-                addMove(builderUnit.id, edge, score, 25);
+                addMove(builderUnit.id, edge, world(edge).resourcesBfs, 25);
             }
         }
     }
