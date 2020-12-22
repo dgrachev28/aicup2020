@@ -863,7 +863,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             if (myUnit.entityType == RANGED_UNIT && !defenders.count(myUnit.id)) {
                 defenders[myUnit.id] = {potential.x, potential.y};
                 ++i;
-                if (i >= potential.count) {
+                if (i >= static_cast<int>(potential.count * 1.3)) {
                     break;
                 }
             }
@@ -1113,7 +1113,7 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
         if (!isTooClose) {
             topPotentials.push_back(p);
         }
-        if (topPotentials.size() >= 6) {
+        if (topPotentials.size() >= 8) {
             break;
         }
     }
@@ -1142,7 +1142,7 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
 //        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
 //    }
 //    std::cerr << "================== ATTACK ====================" << std::endl;
-//    for (const auto& tp : attackPotentials) {
+//    for (const auto& tp : topAttackPotentials) {
 //        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
 //    }
 }
@@ -1904,7 +1904,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
     }
     if (potentialBuilders.empty()) {
         if (playerView->getFood() < 10 && myPlayer.resource >= 47 && playerView->getInactiveHousesCount() < 3
-            && (!playerView->getMyEntities(RANGED_BASE).empty() || playerView->getMyEntities(HOUSE).size() < 5)) {
+            && (!playerView->getMyEntities(RANGED_BASE).empty() || playerView->getMyEntities(HOUSE).size() < 6)) {
             std::vector<Vec2Int> housePositions;
             for (int i = 1; i < 60; i += 1) {
                 for (int j = 1; j < 60; j += 1) {
@@ -2077,7 +2077,8 @@ void MyStrategy::setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions&
     std::unordered_map<EntityPtr, Vec2Int> buildersToTarget;
     for (EntityPtr builder : builders) {
         if (farmTargets.empty()) {
-            break;
+            buildersToTarget[builder] = {70, 70};
+            continue;
         }
         Vec2Int closestResource;
         int minDist = 100000;
