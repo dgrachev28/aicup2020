@@ -236,6 +236,12 @@ std::array<std::array<int, 80>, 80> MyStrategy::dijkstra(const std::vector<Vec2I
                     if (type == MELEE_UNIT || type == RANGED_UNIT || type == BUILDER_UNIT) {
                         len = 28;
                     }
+                    if (type == RANGED_UNIT && enemyMap[edge.x][edge.y] <= 7) {
+                        len = 70;
+                    }
+                    if (type == BUILDER_UNIT && world(edge).farmBuilder) {
+                        len = 70;
+                    }
                     if (type == RESOURCE) {
                         len = 28;
                     }
@@ -289,8 +295,9 @@ MyStrategy::MyStrategy() {
     }
 }
 
-Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debugInterface) {
+Action MyStrategy::getAction(PlayerView& playerView, DebugInterface* debugInterface) {
     this->playerView = &playerView;
+    addPreviousStepInfo(playerView);
     stepInit(playerView);
 
     std::unordered_map<int, EntityAction> actions;
@@ -302,6 +309,7 @@ Action MyStrategy::getAction(const PlayerView& playerView, DebugInterface* debug
     handleMoves(actions);
     handleAttackActions(actions);
     handleBuilderAttackActions(actions);
+    saveStepState();
 
     for (const auto& [unitId, action] : actions) {
 //        if (playerView.entitiesById.at(unitId).position.x > 30
@@ -380,6 +388,14 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
                 world(i, j).entity = &entity;
             }
         }
+        if (entity.entityType == BUILDER_UNIT && entity.playerId == playerView.myId) {
+            for (const auto& edge : edgesMap[entity.position.x][entity.position.y]) {
+                if (world(edge).eqEntityType(RESOURCE)) {
+                    world(entity.position).farmBuilder = true;
+                    break;
+                }
+            }
+        }
         if (entity.entityType == TURRET && entity.playerId != playerView.myId && entity.active) {
             int myRangedCount = 0;
             for (const auto& distId : enemyToMyMapping[entity.id]) {
@@ -410,6 +426,74 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
             }
         }
     }
+}
+
+void MyStrategy::addPreviousStepInfo(PlayerView& playerView) {
+    if (previousEntities.empty() || !playerView.fogOfWar) {
+        return;
+    }
+
+    std::array<std::array<int, 80>, 80> d;
+    for (int i = 0; i < 80; ++i) {
+        for (int j = 0; j < 80; ++j) {
+            d[i][j] = 100000;
+        }
+    }
+    std::queue<Vec2Int> q;
+    for (const auto& entity : playerView.entities) {
+        if (entity.playerId == playerView.myId) {
+            const EntityProperties &properties = playerView.entityProperties.at(entity.entityType);
+            for (int i = entity.position.x; i < entity.position.x + properties.size; ++i) {
+                for (int j = entity.position.y; j < entity.position.y + properties.size; ++j) {
+                    d[i][j] = 0;
+                    q.push({i, j});
+                }
+            }
+        }
+    }
+
+    while (!q.empty()) {
+        const Vec2Int& v = q.front();
+        q.pop();
+        const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
+        for (const Vec2Int& edge : edges) {
+            if (d[edge.x][edge.y] > d[v.x][v.y] + 1 && d[v.x][v.y] < 10) {
+                d[edge.x][edge.y] = d[v.x][v.y] + 1;
+                q.push(edge);
+            }
+        }
+    }
+
+
+    for (const auto& entity : previousEntities) {
+        if (playerView.entitiesById.contains(entity.id) || entity.playerId == playerView.myId) {
+            continue;
+        }
+        const EntityProperties &properties = playerView.entityProperties.at(entity.entityType);
+        for (int i = entity.position.x; i < entity.position.x + properties.size; ++i) {
+            bool stopLoop = false;
+            for (int j = entity.position.y; j < entity.position.y + properties.size; ++j) {
+                if (d[i][j] == 100000) {
+                    playerView.entities.push_back(entity);
+                    playerView.entitiesById[entity.id] = entity;
+                    playerView.entitiesByPlayerId[entity.playerId][entity.entityType].push_back(entity);
+//                    if (entity.entityType == RANGED_UNIT || entity.entityType == BUILDER_UNIT || entity.entityType == HOUSE) {
+//                        std::cerr << "tick: " << playerView.currentTick << ", pos: " << entity.position << std::endl;
+//                    }
+                    stopLoop = true;
+                    break;
+                }
+            }
+            if (stopLoop) {
+                break;
+            }
+        }
+    }
+
+}
+
+void MyStrategy::saveStepState() {
+    previousEntities = playerView->entities;
 }
 
 void MyStrategy::debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface) {
@@ -448,7 +532,7 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
                 maxRangedCount = 45;
                 maxBuildersCount = 80;
             } else {
-                maxRangedCount = 80;
+                maxRangedCount = 100;
                 maxBuildersCount = 80;
             }
         } else {
@@ -459,7 +543,7 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
                 maxRangedCount = 45;
                 maxBuildersCount = 60;
             } else {
-                maxRangedCount = 150;
+                maxRangedCount = 100;
                 maxBuildersCount = 60;
             }
         }
@@ -1363,9 +1447,9 @@ void MyStrategy::handleMoves(Actions& actions) {
         }
         while (!unitsQueue.empty()) {
             int unitId = unitsQueue.front();
-            if (priority == 10) {
-                std::cerr << "Tick: " << playerView->currentTick << ", unitId: " << unitId << std::endl;
-            }
+//            if (priority == 10) {
+//                std::cerr << "Tick: " << playerView->currentTick << ", unitId: " << unitId << std::endl;
+//            }
             unitsQueue.pop();
 
             if (movedUnitIds.count(unitId)) {
@@ -1392,9 +1476,9 @@ void MyStrategy::handleMoves(Actions& actions) {
                 }
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
                 actions[unitId] = MoveAction(moveStep.target, false, false);
-                if (priority == 10) {
-                    std::cerr << "prior 10 QUEUE move: " << moveStep.target << ", unit_pos: " << playerView->entitiesById.at(unitId).position << ", unit_id: " << unitId << std::endl;
-                }
+//                if (priority == 10) {
+//                    std::cerr << "prior 10 QUEUE move: " << moveStep.target << ", unit_pos: " << playerView->entitiesById.at(unitId).position << ", unit_id: " << unitId << std::endl;
+//                }
                 if (unitIds.contains(world(moveStep.target.x, moveStep.target.y).getEntityId())) {
                     unitsQueue.push(world(moveStep.target.x, moveStep.target.y).getEntityId());
                 }
@@ -1446,9 +1530,9 @@ void MyStrategy::handleMoves(Actions& actions) {
             std::set<CollisionPriority> collisions;
             for (const auto& [pos, collision] : collisionsMap) {
                 collisions.insert(collision);
-                if (priority < 2) {
-                    std::cerr << "Tick: " << playerView->currentTick << ", collision: " << collision << std::endl;
-                }
+//                if (priority < 2) {
+//                    std::cerr << "Tick: " << playerView->currentTick << ", collision: " << collision << std::endl;
+//                }
             }
             while (!collisions.empty()) {
                 CollisionPriority collision = CollisionPriority(*collisions.begin());

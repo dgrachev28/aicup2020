@@ -84,6 +84,9 @@ struct Cell {
     bool turretDanger = false;
     const Entity* entity = nullptr;
 
+    // флаг, что рабочий стоит около ресурса, чтобы учитывать его при построении пути дейкстрой
+    bool farmBuilder = false;
+
     bool isEmpty() const {
         return entity == nullptr;
     }
@@ -182,10 +185,6 @@ class MyStrategy {
 public:
     const PlayerView* playerView;
 
-    std::unordered_map<int, BuilderMeta> builderMeta;
-    int edgeHousesShiftX;
-    int edgeHousesShiftY;
-//    std::unordered_map<Vec2Int, std::vector<Vec2Int>> edgesMap;
     std::array<std::array<std::vector<Vec2Int>, 80>, 80> edgesMap;
 
     std::unordered_map<int, std::vector<DistId>> myToMyMapping;
@@ -205,6 +204,7 @@ public:
     std::vector<Vec2Int> farmTargets_;
 
     std::unordered_map<int, Vec2Int> lastTargetPositions;
+    std::vector<Entity> previousEntities;
 
     std::unordered_set<Vec2Int> freeScoutSpots;
     std::unordered_map<int, Vec2Int> scouts;
@@ -212,7 +212,7 @@ public:
     bool isFinal;
 
     MyStrategy();
-    Action getAction(const PlayerView& playerView, DebugInterface* debugInterface);
+    Action getAction(PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
 
     std::array<std::array<int, 80>, 80>
@@ -240,6 +240,9 @@ private:
     bool checkWorldBounds(int x, int y);
 
     void stepInit(const PlayerView& playerView);
+
+    void addPreviousStepInfo(PlayerView& playerView);
+    void saveStepState();
 
     void getBuildUnitActions(const PlayerView& playerView, Actions& actions);
     void setBuilderUnitsActions(Actions& actions);
