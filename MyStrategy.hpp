@@ -278,7 +278,6 @@ private:
     std::vector<PotentialCell> topAttackPotentials;
 
     void findTargetEnemies(const PlayerView& playerView);
-    void createPotentialField(const PlayerView& playerView);
     void fillPotential(int x, int y, float score);
     Vec2Int getWarriorTargetPosition(const Entity &unit);
     void moveBattleUnits(Actions& actions);

@@ -239,7 +239,7 @@ std::array<std::array<int, 80>, 80> MyStrategy::dijkstra(const std::vector<Vec2I
                         len = 18;
                     }
                     if (type == RANGED_UNIT && enemyMap[edge.x][edge.y] <= 6) {
-                        len = 100;
+                        len = 150;
                     }
                     if (type == RANGED_UNIT && enemyMap[edge.x][edge.y] == 7) {
                         len = 70;
@@ -269,6 +269,10 @@ int dist(const Entity& e1, const Entity& e2) {
 
 int dist(const Vec2Int& p1, const Vec2Int& p2) {
     return std::abs(p1.x - p2.x) + std::abs(p1.y - p2.y);
+}
+
+int dist2(const Vec2Int& p1, const Vec2Int& p2) {
+    return (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y);
 }
 
 bool eqPlayerTeam(int p1, int p2, const PlayerView& playerView) {
@@ -477,7 +481,33 @@ void MyStrategy::addPreviousStepInfo(PlayerView& playerView) {
     }
     std::queue<Vec2Int> q;
     for (const auto& entity : playerView.entities) {
-        if (entity.playerId == playerView.myId) {
+        if (entity.playerId == playerView.myId
+                && (entity.entityType == BUILDER_UNIT
+                || entity.entityType == MELEE_UNIT
+                || entity.entityType == RANGED_UNIT)) {
+            d[entity.position.x][entity.position.y] = 0;
+            q.push(entity.position);
+        }
+    }
+
+    while (!q.empty()) {
+        const Vec2Int& v = q.front();
+        q.pop();
+        const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
+        for (const Vec2Int& edge : edges) {
+            if (d[edge.x][edge.y] > d[v.x][v.y] + 1 && d[v.x][v.y] < 10) {
+                d[edge.x][edge.y] = d[v.x][v.y] + 1;
+                q.push(edge);
+            }
+        }
+    }
+
+    for (const auto& entity : playerView.entities) {
+        if (entity.playerId == playerView.myId
+                && (entity.entityType == BUILDER_BASE
+                || entity.entityType == MELEE_BASE
+                || entity.entityType == RANGED_BASE
+                || entity.entityType == HOUSE)) {
             const EntityProperties &properties = playerView.entityProperties.at(entity.entityType);
             for (int i = entity.position.x; i < entity.position.x + properties.size; ++i) {
                 for (int j = entity.position.y; j < entity.position.y + properties.size; ++j) {
@@ -493,7 +523,7 @@ void MyStrategy::addPreviousStepInfo(PlayerView& playerView) {
         q.pop();
         const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
         for (const Vec2Int& edge : edges) {
-            if (d[edge.x][edge.y] > d[v.x][v.y] + 1 && d[v.x][v.y] < 10) {
+            if (d[edge.x][edge.y] > d[v.x][v.y] + 1 && d[v.x][v.y] < 5) {
                 d[edge.x][edge.y] = d[v.x][v.y] + 1;
                 q.push(edge);
             }
@@ -913,6 +943,27 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
         }
     }
 
+    std::unordered_map<int, Vec2Int> attackers;
+    for (const auto& potential : topAttackPotentials) {
+        if (world(potential.x, potential.y).isEmpty()) {
+            continue;
+        }
+        if (!dijkstraResults.count({potential.x, potential.y})) {
+            dijkstraResults[{potential.x, potential.y}] = dijkstra({{potential.x, potential.y}});
+        }
+        int i = 0;
+        for (const DistId& distId : enemyToMyMapping[world(potential.x, potential.y).entity->id]) {
+            const Entity& myUnit = playerView.entitiesById.at(distId.entityId);
+            if (myUnit.entityType == RANGED_UNIT && !defenders.count(myUnit.id) && !attackers.count(myUnit.id)) {
+                attackers[myUnit.id] = {potential.x, potential.y};
+                ++i;
+                if (i >= 3) {
+                    break;
+                }
+            }
+        }
+    }
+
 //    const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
     const auto& meleeUnits = playerView.getMyEntities(MELEE_UNIT);
     int armySize = rangedUnits.size() + meleeUnits.size();
@@ -937,27 +988,26 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
         if ((playerView.currentTick > 100 || minEnemyDist < 30) && minEnemyId != -1) {
             if (defenders.count(unit.id)) {
                 targetPosition = defenders[unit.id];
+            } else if (attackers.count(unit.id)) {
+                targetPosition = attackers[unit.id];
             } else {
-                int minPotentialDist = 100000;
-                for (const auto& potential : topPotentials) {
-                    int distance = dist({potential.x, potential.y}, unit.position);
-                    if (distance < minPotentialDist) {
-                        minPotentialDist = distance;
-                        targetPosition = {potential.x, potential.y};
-                    }
-                }
-                for (const auto& potential : topAttackPotentials) {
-                    int distance = dist({potential.x, potential.y}, unit.position);
-                    if (distance < minPotentialDist) {
-                        minPotentialDist = distance;
-                        targetPosition = {potential.x, potential.y};
-                    }
-                }
+                targetPosition = {70, 70};
+//                int minPotentialDist = 100000;
+//                for (const auto& potential : topPotentials) {
+//                    int distance = dist({potential.x, potential.y}, unit.position);
+//                    if (distance < minPotentialDist) {
+//                        minPotentialDist = distance;
+//                        targetPosition = {potential.x, potential.y};
+//                    }
+//                }
+//                for (const auto& potential : topAttackPotentials) {
+//                    int distance = dist({potential.x, potential.y}, unit.position);
+//                    if (distance < minPotentialDist) {
+//                        minPotentialDist = distance;
+//                        targetPosition = {potential.x, potential.y};
+//                    }
+//                }
             }
-//            targetPosition = getWarriorTargetPosition(unit);
-//            if (targetPosition == Vec2Int(0, 0)) {
-//                targetPosition = playerView.entitiesById.at(minEnemyId).position;
-//            }
         }
         if (playerView.fogOfWar && scouts.count(unit.id)) {
             targetPosition = scouts[unit.id];
@@ -974,7 +1024,9 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
         }
         std::vector<Vec2Int> edges = getEdges(unit.position, true);
         std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
-            return dijkstraResults.at(targetPosition)[v1.x][v1.y] < dijkstraResults.at(targetPosition)[v2.x][v2.y];
+            int score1 = dijkstraResults.at(targetPosition)[v1.x][v1.y] * 1000 + dist2(v1, targetPosition);
+            int score2 = dijkstraResults.at(targetPosition)[v2.x][v2.y] * 1000 + dist2(v2, targetPosition);
+            return score1 < score2;
         });
 
         if (world(edges[0]).eqEntityType(RESOURCE)) {
@@ -982,7 +1034,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             shootResourcePositions.push_back(edges[0]);
         }
         for (const auto& edge : edges) {
-            addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
+            addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y] * 1000 + dist2(edge, targetPosition), 10);
         }
     }
 
@@ -1114,32 +1166,39 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
 
         if (enemy.playerId != playerView.myId && (enemy.entityType == HOUSE || enemy.entityType == RANGED_BASE
                 || enemy.entityType == MELEE_BASE || enemy.entityType == BUILDER_BASE || enemy.entityType == BUILDER_UNIT)) {
+            int i = 0;
+            float avgBuilderDist = 0.0;
+            int buildingDist = 0;
             float myPowerScore = 0.0;
-//            float enemyPowerScore = 0.0;
+            float enemyPowerScore = 0.0;
             for (const DistId& distId : enemyToMyMapping[enemy.id]) {
                 const Entity& unit = playerView.entitiesById.at(distId.entityId);
                 const auto& distance = dist(enemy, unit);
-                if ((unit.entityType == RANGED_UNIT || unit.entityType == MELEE_UNIT) && distance < 30) {
-                    myPowerScore += unitScore[unit.entityType] * linearDecay(distance, 50);
+                if (unit.entityType == BUILDER_UNIT) {
+                    if (i < 7) {
+                        avgBuilderDist += distance;
+                        ++i;
+                    }
+                }
+                if ((unit.entityType == HOUSE || unit.entityType == RANGED_BASE || unit.entityType == BUILDER_BASE || unit.entityType == MELEE_BASE) && buildingDist == 0) {
+                    int entitySize = playerView.entityProperties.at(unit.entityType).size / 2;
+                    buildingDist = dist(enemy.position, {unit.position.x + entitySize, unit.position.y + entitySize});
+                }
+                if ((unit.entityType == RANGED_UNIT || unit.entityType == MELEE_UNIT) && distance < 15) {
+                    myPowerScore += unitScore[unit.entityType] * linearDecay(std::max(distance - 3, 0), 30);
                 }
             }
-//
-//            for (const DistId& distId : enemyToEnemyMapping[enemy.id]) {
-//                const Entity& unit = playerView.entitiesById.at(distId.entityId);
-//                const auto& distance = dist(enemy, unit);
-//                if (distance >= 30) {
-//                    break;
-//                }
-//                if (unit.entityType == RANGED_UNIT || unit.entityType == MELEE_UNIT) {
-//                    enemyPowerScore += unitScore[unit.entityType] * linearDecay(distance, 50);
-//                }
-//            }
 
-            Score score{0.0f, 0.0f, myPowerScore, 0.0f};
-            score.calcAttackScore();
-            attackPotentials.push_back({score, enemy.position.x, enemy.position.y});
+            if (i > 0) {
+                avgBuilderDist /= static_cast<float>(i);
+            }
+            float myBuildingScore = customDecay(buildingDist);
+            float myBuilderScore = customDecay(avgBuilderDist);
+
+            Score score{myBuildingScore, myBuilderScore, myPowerScore, enemyPowerScore};
+            score.calcScore2();
+            potentials.push_back({score, enemy.position.x, enemy.position.y, 1});
         }
-
     }
 
     std::sort(potentials.begin(), potentials.end());
@@ -1157,7 +1216,7 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
         if (!isTooClose) {
             topPotentials.push_back(p);
         }
-        if (topPotentials.size() >= 8) {
+        if (topPotentials.size() >= 8 || p.score.score < 50) {
             break;
         }
     }
@@ -1189,59 +1248,6 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
 //    for (const auto& tp : topAttackPotentials) {
 //        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
 //    }
-}
-
-void MyStrategy::createPotentialField(const PlayerView& playerView) {
-//    for (int i = 0; i < 80; ++i) {
-//        for (int j = 0; j < 80; ++j) {
-//            potentialField[i][j] = 0;
-//        }
-//    }
-//
-//    static std::unordered_map<EntityType, float> unitScore = {{RANGED_UNIT, 1.0}, {MELEE_UNIT, 0.5}};
-//    const int kLargestDistance = 30;
-//    // TODO: change loop header
-//    for (const auto& myEntity : playerView.entitiesByPlayerId.at(playerView.myId).at(EntityType::BUILDER_UNIT)) {
-//        float myScore = 0.0;
-//        float enemyScore = 0.0;
-//        for (const DistId& distId : entitiesMapping[myEntity.id]) {
-//            if (distId.distance > kLargestDistance) {
-//                break;
-//            }
-//            float distScore;
-//            const Entity& otherEntity = playerView.entitiesById.at(distId.entityId);
-//            if (otherEntity.playerId == playerView.myId) {
-//                if (distId.distance <= 5) {
-//                    distScore = 1.0 - (distId.distance / 10.0);
-//                } else {
-//                    distScore = 0.0;
-//                }
-//                myScore += unitScore[otherEntity.entityType] * distScore;
-//            } else {
-//                distScore = 1.0 - (distId.distance / kLargestDistance);
-//                enemyScore += unitScore[otherEntity.entityType] * distScore;
-//            }
-//        }
-//
-//        float winScore = std::min(myScore - enemyScore, 1.0f);
-////        float potential = 1.0 - winScore;
-////        if (potential < 0) {
-////            potential = 0.0;
-////        }
-////        potential = potential * 10.0 + (kLargestDistance - loseDistance);
-//        fillPotential(myEntity.position.x, myEntity.position.y, winScore);
-//    }
-//    topPotentials.clear();
-//    for (int i = 0; i < 80; ++i) {
-//        for (int j = 0; j < 80; ++j) {
-//            topPotentials.push_back(PotentialCell{potentialField[i][j], i, j});
-//        }
-//    }
-//    std::sort(topPotentials.begin(), topPotentials.end());
-//    std::reverse(topPotentials.begin(), topPotentials.end());
-//
-//    std::cerr << "tick: " << playerView.currentTick << "score: " << topPotentials[0].score << ", x: "
-//              << topPotentials[0].x << ", y: " << topPotentials[0].y << std::endl;
 }
 
 
@@ -1350,21 +1356,21 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
 //                  << ", my1: " << my1 << ", enemy1: " << enemy1
 //                  << ", my2: " << my2 << ", enemy2: " << enemy2
 //                  << std::endl;
-        int myPower = my0 * 2 + my1 * 2 + my2;
-        int enemyPower = enemy0 * 2 + enemy1 * 2 + enemy2;
+        int myPower = my0 * 3 + my1 * 3 + my2;
+        int enemyPower = enemy0 * 3 + enemy1 * 3 + enemy2;
         MicroState microState;
-        if (minDefenseDist < 8) {
+        if (minDefenseDist < 10) {
             if (myPower >= enemyPower) {
                 microState = MicroState::ATTACK;
-            } else if (myPower >= enemyPower - 2) {
+            } else if (myPower >= enemyPower - 3) {
                 microState = MicroState::STAY;
             } else {
                 microState = MicroState::RUN_AWAY;
             }
         } else {
-            if (myPower >= enemyPower + 2) {
+            if (myPower >= enemyPower + 3) {
                 microState = MicroState::ATTACK;
-            } else if (myPower > enemyPower - 1) {
+            } else if (myPower > enemyPower) {
                 microState = MicroState::STAY;
             } else {
                 microState = MicroState::RUN_AWAY;
