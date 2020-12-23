@@ -311,6 +311,7 @@ Action MyStrategy::getAction(PlayerView& playerView, DebugInterface* debugInterf
     getRangedUnitAction(playerView, actions);
     getBuildUnitActions(playerView, actions);
 
+    shootResources(actions);
     handleMoves(actions);
     handleAttackActions(actions);
     handleBuilderAttackActions(actions);
@@ -581,6 +582,9 @@ void MyStrategy::getBuildUnitActions(const PlayerView& playerView, Actions& acti
                 maxRangedCount = 100;
                 maxBuildersCount = 60;
             }
+        }
+        if (playerView.currentTick > 600) {
+            maxBuildersCount = (1000 - playerView.currentTick) / (1000 - 600);
         }
 
         if (!topPotentials.empty()) {
@@ -975,6 +979,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 
         if (world(edges[0]).eqEntityType(RESOURCE)) {
             builderAttackActions[unit.id] = AttackAction(world(edges[0]).getEntityId());
+            shootResourcePositions.push_back(edges[0]);
         }
         for (const auto& edge : edges) {
             addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
@@ -1411,6 +1416,28 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
             }
         }
     }
+}
+
+void MyStrategy::shootResources(Actions& actions) {
+    for (const auto& unit : playerView->getMyEntities(RANGED_UNIT)) {
+        if (!movePriorityToUnitIds[10].contains(unit.id)) {
+            continue;
+        }
+        for (const auto& pos : shootResourcePositions) {
+            if (dist(pos, unit.position) <= 5) {
+                std::vector<MoveStep> newMoveSteps;
+                newMoveSteps.push_back({unit.id, unit.position, 0});
+                for (const auto& moveStep : unitMoveSteps[unit.id]) {
+                    if (moveStep.target != unit.position) {
+                        newMoveSteps.push_back(moveStep);
+                    }
+                }
+                unitMoveSteps[unit.id] = newMoveSteps;
+                builderAttackActions[unit.id] = AttackAction(world(pos).getEntityId());
+            }
+        }
+    }
+    shootResourcePositions.clear();
 }
 
 void MyStrategy::addMove(int unitId, const Vec2Int& target, int score, int priority) {

@@ -203,6 +203,8 @@ public:
     std::unordered_map<int, std::vector<MoveStep>> unitMoveSteps;
     Actions builderAttackActions;
 
+    std::vector<Vec2Int> shootResourcePositions;
+
     std::vector<Vec2Int> farmTargets_;
 
     std::unordered_map<int, Vec2Int> lastTargetPositions;
@@ -284,6 +286,8 @@ private:
     void battleDfs(int unitId, std::unordered_set<int>& groupedUnits, std::unordered_map<int, int>& group);
 
     // End of Ranged units actions
+
+    void shootResources(Actions& actions);
 
     void addMove(int unitId, const Vec2Int& target, int score, int priority);
     void handleMoves(Actions& actions);
