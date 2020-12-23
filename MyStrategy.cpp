@@ -1413,6 +1413,37 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
                         addMove(unit.id, edge, enemyMap[edge.x][edge.y], 1);
                     }
                 }
+                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] == 7) {
+                    std::vector<Vec2Int> edges = getEdges(unit.position, true);
+                    std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+                        return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
+                    });
+                    for (const auto& edge : edges) {
+                        addMove(unit.id, edge, enemyMap[edge.x][edge.y], 2);
+                    }
+                }
+            }
+        } else if (microState == MicroState::ATTACK) {
+            for (const auto& [unitId, distance] : group) {
+                const Entity& unit = playerView->entitiesById.at(unitId);
+                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] == 6) {
+                    std::vector<Vec2Int> edges = getEdges(unit.position, true);
+                    std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+                        return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
+                    });
+                    for (const auto& edge : edges) {
+                        addMove(unit.id, edge, enemyMap[edge.x][edge.y], 1);
+                    }
+                }
+                if (unit.playerId == playerView->myId && enemyMap[unit.position.x][unit.position.y] == 7) {
+                    std::vector<Vec2Int> edges = getEdges(unit.position, true);
+                    std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+                        return enemyMap[v1.x][v1.y] < enemyMap[v2.x][v2.y];
+                    });
+                    for (const auto& edge : edges) {
+                        addMove(unit.id, edge, enemyMap[edge.x][edge.y], 2);
+                    }
+                }
             }
         }
     }
@@ -1420,7 +1451,7 @@ void MyStrategy::moveBattleUnits(Actions& actions) {
 
 void MyStrategy::shootResources(Actions& actions) {
     for (const auto& unit : playerView->getMyEntities(RANGED_UNIT)) {
-        if (!movePriorityToUnitIds[10].contains(unit.id)) {
+        if (enemyMap[unit.position.x][unit.position.y] < 8) {
             continue;
         }
         for (const auto& pos : shootResourcePositions) {
