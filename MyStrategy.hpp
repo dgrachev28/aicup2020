@@ -166,6 +166,11 @@ struct PotentialBuilder {
     Vec2Int position;
 };
 
+struct BfsBuilding {
+    Vec2Int position;
+    int score;
+};
+
 class MyStrategy {
 public:
     const PlayerView* playerView;
@@ -209,7 +214,7 @@ public:
         const std::unordered_set<EntityType>& obstacleTypes,
         const std::vector<int>& obstacleUnitIds);
 
-    std::array<std::array<int, 80>, 80>
+    std::array<std::array<BfsBuilding, 80>, 80>
     bfs(const std::vector<Vec2Int>& startCells,
         const std::unordered_set<EntityType>& obstacleTypes,
         const std::vector<int>& obstacleUnitIds,
@@ -309,7 +314,7 @@ private:
     void setFarmers(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions& actions);
 
-    std::vector<Vec2Int> getBuildingEdges(const Vec2Int& position, int size, bool areUnitsEmpty);
+    std::vector<Vec2Int> getBuildingEdges(const Vec2Int& position, int size, const std::unordered_set<EntityType>& entityTypes);
     std::vector<Vec2Int> getBuildingEdges(int buildingId);
 };
 
