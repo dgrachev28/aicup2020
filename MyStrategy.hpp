@@ -217,9 +217,13 @@ public:
 
     std::array<std::array<int, 80>, 80> bfs(const std::vector<Vec2Int>& startCells);
 
+    int bfsForValidateBuildings(const std::vector<Vec2Int>& startCells,
+                                const std::unordered_set<EntityType>& obstacleTypes,
+                                const std::unordered_set<Vec2Int>& obstacleCells);
+
     std::vector<Vec2Int> bfsBuilderResources(const std::vector<Vec2Int>& startCells,
         const std::unordered_set<EntityType>& obstacleTypes,
-        const std::unordered_set<int>& obstacleUnitIds);
+        const std::unordered_set<Vec2Int>& obstacleCells);
     std::array<std::array<int, 80>, 80> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
 
 private:
