@@ -540,7 +540,7 @@ void MyStrategy::addPreviousStepInfo(PlayerView& playerView) {
                 continue;
             }
             for (const auto& edge : edgesMap[i][j]) {
-                if (d[edge.x][edge.y] != 100000) {
+                if (d[edge.x][edge.y] != 100000 && (edge.x > i || edge.y > j)) {
                     visionBounds.emplace_back(i, j);
                 }
             }
@@ -944,7 +944,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
                 int closestUnitId = -1;
                 for (const auto& unit : playerView.getMyEntities(RANGED_UNIT)) {
                     int distance = dist(unit.position, visionBound);
-                    if (!defenderScouts.contains(closestUnitId) && distance < minDist) {
+                    if (!defenderScouts.contains(unit.id) && distance < minDist) {
                         minDist = distance;
                         closestUnitId = unit.id;
                     }
@@ -990,7 +990,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             if (myUnit.entityType == RANGED_UNIT && !defenders.count(myUnit.id)) {
                 defenders[myUnit.id] = {potential.x, potential.y};
                 ++i;
-                if (i >= static_cast<int>(potential.count)) {
+                if (i >= potential.count + 1) {
                     break;
                 }
             }
@@ -1039,36 +1039,20 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
                 targetPosition = {9, 70};
             }
         }
-        if ((playerView.currentTick > 100 || minEnemyDist < 30) && minEnemyId != -1) {
+        if (playerView.currentTick > 100 || minEnemyDist < 30) {
             if (defenders.count(unit.id)) {
                 targetPosition = defenders[unit.id];
             } else if (attackers.count(unit.id)) {
                 targetPosition = attackers[unit.id];
             } else {
-                targetPosition = {70, 70};
-//                int minPotentialDist = 100000;
-//                for (const auto& potential : topPotentials) {
-//                    int distance = dist({potential.x, potential.y}, unit.position);
-//                    if (distance < minPotentialDist) {
-//                        minPotentialDist = distance;
-//                        targetPosition = {potential.x, potential.y};
-//                    }
-//                }
-//                for (const auto& potential : topAttackPotentials) {
-//                    int distance = dist({potential.x, potential.y}, unit.position);
-//                    if (distance < minPotentialDist) {
-//                        minPotentialDist = distance;
-//                        targetPosition = {potential.x, potential.y};
-//                    }
-//                }
-            }
-        }
-        if (playerView.fogOfWar) {
-            if (scouts.contains(unit.id)) {
-                targetPosition = scouts[unit.id];
-            }
-            if (defenderScouts.contains(unit.id)) {
-                targetPosition = defenderScouts[unit.id];
+                if (playerView.fogOfWar) {
+                    if (scouts.contains(unit.id)) {
+                        targetPosition = scouts[unit.id];
+                    }
+                    if (defenderScouts.contains(unit.id)) {
+                        targetPosition = defenderScouts[unit.id];
+                    }
+                }
             }
         }
 
@@ -1846,6 +1830,12 @@ void MyStrategy::handleAttackActions(Actions& actions) {
                     (enemyHealth[enemy2] + 4) / 5 < enemyToMyCounts[enemy2]) {
                     return false;
                 }
+                if ((enemyHealth[enemy1] + 4) / 5 < (enemyHealth[enemy2] + 4) / 5) {
+                    return true;
+                }
+                if ((enemyHealth[enemy1] + 4) / 5 > (enemyHealth[enemy2] + 4) / 5) {
+                    return false;
+                }
                 return type1 == BUILDER_UNIT;
             });
             if (enemyToMy[enemies[0]].empty()) {
@@ -1905,6 +1895,7 @@ void MyStrategy::shoot(
     }
     myToEnemy.erase(myId);
 
+//    std::cerr << "tick: " << playerView->currentTick << ", shoot: " << enemyId << std::endl;
     actions[myId] = AttackAction(enemyId);
 }
 
@@ -2044,10 +2035,12 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
     }
     int maxHousesCount = isFinal ? 10 : 6;
     if (potentialBuilders.empty()) {
-        int maxInactiveHousesCount = playerView->getMyEntities(RANGED_BASE).empty() ? 1 : 4;
+        int maxInactiveHousesCount = playerView->getMyEntities(RANGED_BASE).empty() ? 1 : 3;
+        int housesCount = playerView->getMyEntities(HOUSE).size();
         if (playerView->getFood() < 10
-                && (myPlayer.resource >= 47 && playerView->getInactiveHousesCount() < maxInactiveHousesCount)
-                && (!playerView->getMyEntities(RANGED_BASE).empty() || playerView->getMyEntities(HOUSE).size() < maxHousesCount)) {
+                && ((myPlayer.resource >= 47 && playerView->getInactiveHousesCount() < 1)
+                || (myPlayer.resource >= 200 && playerView->getInactiveHousesCount() < 2))
+                && (!playerView->getMyEntities(RANGED_BASE).empty() || housesCount < maxHousesCount)) {
             std::vector<Vec2Int> housePositions;
             for (int i = 1; i < 60; i += 1) {
                 for (int j = 1; j < 60; j += 1) {
