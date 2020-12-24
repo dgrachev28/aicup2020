@@ -321,6 +321,8 @@ Action MyStrategy::getAction(PlayerView& playerView, DebugInterface* debugInterf
     handleBuilderAttackActions(actions);
     saveStepState();
 
+    visionBounds.clear();
+
     for (const auto& [unitId, action] : actions) {
 //        if (playerView.entitiesById.at(unitId).position.x > 30
 //                && playerView.entitiesById.at(unitId).entityType == RANGED_UNIT) {
@@ -393,6 +395,7 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
     }
     std::vector<Vec2Int> resourcesBfsPositions;
     std::vector<Vec2Int> myBuildingsBfsPositions;
+    std::vector<Vec2Int> myBuildersBfsPositions;
     for (auto& entity : playerView.entities) {
         const EntityProperties& properties = playerView.entityProperties.at(entity.entityType);
         for (int i = entity.position.x; i < entity.position.x + properties.size; ++i) {
@@ -407,6 +410,7 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
             }
         }
         if (entity.entityType == BUILDER_UNIT && entity.playerId == playerView.myId) {
+            myBuildersBfsPositions.push_back(entity.position);
             for (const auto& edge : edgesMap[entity.position.x][entity.position.y]) {
                 if (world(edge).eqEntityType(RESOURCE)) {
                     world(entity.position).farmBuilder = true;
@@ -459,10 +463,12 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
     }
 
     const auto& myBuildingsBfs = bfs(myBuildingsBfsPositions);
+    const auto& myBuildersBfs = bfs(myBuildersBfsPositions);
     const auto& resourcesBfs = bfs(resourcesBfsPositions);
     for (int i = 0; i < 80; ++i) {
         for (int j = 0; j < 80; ++j) {
             world(i, j).myBuildingsBfs = myBuildingsBfs[i][j];
+            world(i, j).myBuildersBfs = myBuildersBfs[i][j];
             world(i, j).resourcesBfs = resourcesBfs[i][j];
         }
     }
@@ -493,8 +499,7 @@ void MyStrategy::addPreviousStepInfo(PlayerView& playerView) {
     while (!q.empty()) {
         const Vec2Int& v = q.front();
         q.pop();
-        const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
-        for (const Vec2Int& edge : edges) {
+        for (const Vec2Int& edge : edgesMap[v.x][v.y]) {
             if (d[edge.x][edge.y] > d[v.x][v.y] + 1 && d[v.x][v.y] < 10) {
                 d[edge.x][edge.y] = d[v.x][v.y] + 1;
                 q.push(edge);
@@ -521,11 +526,23 @@ void MyStrategy::addPreviousStepInfo(PlayerView& playerView) {
     while (!q.empty()) {
         const Vec2Int& v = q.front();
         q.pop();
-        const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
-        for (const Vec2Int& edge : edges) {
+        for (const Vec2Int& edge : edgesMap[v.x][v.y]) {
             if (d[edge.x][edge.y] > d[v.x][v.y] + 1 && d[v.x][v.y] < 5) {
                 d[edge.x][edge.y] = d[v.x][v.y] + 1;
                 q.push(edge);
+            }
+        }
+    }
+
+    for (int i = 0; i < 80; ++i) {
+        for (int j = 0; j < 80; ++j) {
+            if (d[i][j] != 100000) {
+                continue;
+            }
+            for (const auto& edge : edgesMap[i][j]) {
+                if (d[edge.x][edge.y] != 100000) {
+                    visionBounds.emplace_back(i, j);
+                }
             }
         }
     }
@@ -869,6 +886,7 @@ EntityAction MyStrategy::createBuildUnitAction2(const Entity& base, EntityType u
 
 void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& actions) {
     const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
+    std::unordered_map<int, Vec2Int> defenderScouts;
     if (playerView.fogOfWar) {
         if (scouts.empty() && freeScoutSpots.empty()) {
             if (isFinal) {
@@ -906,6 +924,42 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             }
         }
         freeScoutSpots = newFreeScoutSpots;
+
+        std::sort(visionBounds.begin(), visionBounds.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+            return world(v1).myBuildersBfs < world(v2).myBuildersBfs;
+        });
+        for (const auto& visionBound : visionBounds) {
+            if (visionBound.x + visionBound.y < 20) {
+                continue;
+            }
+            bool isTooClose = false;
+            for (const auto& [unitId, position] : defenderScouts) {
+                if (dist(position, visionBound) < 20) {
+                    isTooClose = true;
+                    break;
+                }
+            }
+            if (!isTooClose) {
+                int minDist = 10000;
+                int closestUnitId = -1;
+                for (const auto& unit : playerView.getMyEntities(RANGED_UNIT)) {
+                    int distance = dist(unit.position, visionBound);
+                    if (!defenderScouts.contains(closestUnitId) && distance < minDist) {
+                        minDist = distance;
+                        closestUnitId = unit.id;
+                    }
+                }
+                if (closestUnitId != -1) {
+//                    std::cerr << "tick: " << playerView.currentTick << ", unitId: " << closestUnitId
+//                              << ", postion: " << visionBound << ", ranged dist: " << minDist
+//                              << ", builder dist: " << world(visionBound).myBuildersBfs << std::endl;
+                    defenderScouts[closestUnitId] = visionBound;
+                }
+                if (defenderScouts.size() >= 3 || world(visionBound).myBuildersBfs > 20) {
+                    break;
+                }
+            }
+        }
     } else {
         bool isAnyEnemy = false;
         for (const Entity& entity : playerView.entities) {
@@ -936,7 +990,7 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             if (myUnit.entityType == RANGED_UNIT && !defenders.count(myUnit.id)) {
                 defenders[myUnit.id] = {potential.x, potential.y};
                 ++i;
-                if (i >= static_cast<int>(potential.count * 1.3)) {
+                if (i >= static_cast<int>(potential.count)) {
                     break;
                 }
             }
@@ -1009,9 +1063,15 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
 //                }
             }
         }
-        if (playerView.fogOfWar && scouts.count(unit.id)) {
-            targetPosition = scouts[unit.id];
+        if (playerView.fogOfWar) {
+            if (scouts.contains(unit.id)) {
+                targetPosition = scouts[unit.id];
+            }
+            if (defenderScouts.contains(unit.id)) {
+                targetPosition = defenderScouts[unit.id];
+            }
         }
+
         if (minEnemyDist < 6) {
             actions[unit.id] = AttackAction({1000, {
                     WALL, HOUSE, BUILDER_BASE, BUILDER_UNIT, MELEE_BASE,
@@ -1982,11 +2042,12 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
             }
         }
     }
+    int maxHousesCount = isFinal ? 10 : 6;
     if (potentialBuilders.empty()) {
         int maxInactiveHousesCount = playerView->getMyEntities(RANGED_BASE).empty() ? 1 : 4;
         if (playerView->getFood() < 10
                 && (myPlayer.resource >= 47 && playerView->getInactiveHousesCount() < maxInactiveHousesCount)
-                && (!playerView->getMyEntities(RANGED_BASE).empty() || playerView->getMyEntities(HOUSE).size() < 10)) {
+                && (!playerView->getMyEntities(RANGED_BASE).empty() || playerView->getMyEntities(HOUSE).size() < maxHousesCount)) {
             std::vector<Vec2Int> housePositions;
             for (int i = 1; i < 60; i += 1) {
                 for (int j = 1; j < 60; j += 1) {

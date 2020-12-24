@@ -87,6 +87,7 @@ struct Cell {
     // флаг, что рабочий стоит около ресурса, чтобы учитывать его при построении пути дейкстрой
     bool farmBuilder = false;
     int myBuildingsBfs = 100000;
+    int myBuildersBfs = 100000;
     int resourcesBfs = 100000;
 
     bool isEmpty() const {
@@ -122,24 +123,6 @@ struct Cell {
 };
 
 using World = std::array<std::array<Cell, 80>, 80>;
-
-enum class BuilderState {
-    FARM,
-    MOVE_TO_FARM,
-    REPAIR,
-    BUILD_HOUSE,
-    MOVE_TO_BUILD_HOUSE
-};
-
-class BuilderMeta {
-public:
-    BuilderState state;
-    std::optional<Vec2Int> target;
-
-    BuilderMeta() {}
-    BuilderMeta(BuilderState state) : state(state), target(std::nullopt) {}
-    BuilderMeta(BuilderState state, std::optional<Vec2Int> target) : state(state), target(target) {}
-};
 
 struct Scout {
     Vec2Int target;
@@ -212,6 +195,8 @@ public:
 
     std::unordered_set<Vec2Int> freeScoutSpots;
     std::unordered_map<int, Vec2Int> scouts;
+
+    std::vector<Vec2Int> visionBounds;
 
     bool isFinal;
 
