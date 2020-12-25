@@ -1039,8 +1039,21 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
         if (!dijkstraResults.count({potential.x, potential.y})) {
             dijkstraResults[{potential.x, potential.y}] = dijkstra({{potential.x, potential.y}});
         }
-        int i = 0;
+
+        int entityToDefId = -1;
         for (const DistId& distId : enemyToMyMapping[world(potential.x, potential.y).entity->id]) {
+            const Entity& myUnit = playerView.entitiesById.at(distId.entityId);
+            if (myUnit.entityType == HOUSE || myUnit.entityType == BUILDER_UNIT || myUnit.entityType == BUILDER_BASE || myUnit.entityType == RANGED_BASE) {
+                entityToDefId = myUnit.id;
+                break;
+            }
+        }
+
+        if (entityToDefId == -1) {
+            continue;
+        }
+        int i = 0;
+        for (const DistId& distId : myToMyMapping[entityToDefId]) {
             const Entity& myUnit = playerView.entitiesById.at(distId.entityId);
             if (myUnit.entityType == RANGED_UNIT && !defenders.count(myUnit.id)) {
                 defenders[myUnit.id] = {potential.x, potential.y};
@@ -2245,7 +2258,7 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
             continue;
         }
         int maxBuildersCount = building.entityType == RANGED_BASE ? 12 : 5;
-        int maxBuildersDist = building.entityType == RANGED_BASE ? 15 : 6;
+        int maxBuildersDist = building.entityType == RANGED_BASE ? 20 : 6;
         std::vector<Vec2Int> buildingEdges = getBuildingEdges(brokenBuilding);
 
         int count = repairersCounts[brokenBuilding];
@@ -2308,7 +2321,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
         if (playerView->getFood() < 10
                 && ((myPlayer.resource >= 50 && playerView->getInactiveHousesCount() < 1)
                 || (myPlayer.resource >= 200 && playerView->getInactiveHousesCount() < 2))
-                && (!playerView->getMyEntities(RANGED_BASE).empty() || (housesCount < maxHousesCount && !isEnemyRangedBaseBuilt))) {
+                && (!playerView->getMyEntities(RANGED_BASE).empty() || (housesCount < maxHousesCount && !isEnemyRangedBaseBuilt && myPlayer.resource < 1000))) {
             std::vector<Vec2Int> housePositions;
             for (int i = 1; i < 60; i += 1) {
                 for (int j = 1; j < 60; j += 1) {
@@ -2333,8 +2346,11 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
                 return builder1.score < builder2.score;
             });
         } else if (buildType == RANGED_BASE) {
+//            int targetRangedPosition = isEnemyRangedBaseBuilt ? 20 : 27;
+            int targetRangedPosition = 30;
+            Vec2Int targetRangedPos{targetRangedPosition, targetRangedPosition};
             std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
-                return builder1.score * 2 + dist({27, 27}, builder1.position) < builder2.score * 2 + dist({27, 27}, builder2.position);
+                return builder1.score + dist(targetRangedPos, builder1.position) < builder2.score + dist(targetRangedPos, builder2.position);
             });
         }
 
