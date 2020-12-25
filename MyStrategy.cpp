@@ -411,6 +411,14 @@ void MyStrategy::stepInit(const PlayerView& playerView) {
             anyEnemyId = player.id;
         }
     }
+    if (isFinal) {
+        int currentEnemyResources = playerView.playersById.at(anyEnemyId).resource;
+        if (prevEnemyResources - currentEnemyResources > 400) {
+            isEnemyRangedBaseBuilt = true;
+        }
+        prevEnemyResources = currentEnemyResources;
+    }
+
     myToMyMapping = calculateDistances(playerView, playerView.myId, playerView.myId);
     myToEnemyMapping = calculateDistances(playerView, playerView.myId, anyEnemyId);
     enemyToMyMapping = calculateDistances(playerView, anyEnemyId, playerView.myId);
@@ -2300,7 +2308,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
         if (playerView->getFood() < 10
                 && ((myPlayer.resource >= 50 && playerView->getInactiveHousesCount() < 1)
                 || (myPlayer.resource >= 200 && playerView->getInactiveHousesCount() < 2))
-                && (!playerView->getMyEntities(RANGED_BASE).empty() || housesCount < maxHousesCount)) {
+                && (!playerView->getMyEntities(RANGED_BASE).empty() || (housesCount < maxHousesCount && !isEnemyRangedBaseBuilt))) {
             std::vector<Vec2Int> housePositions;
             for (int i = 1; i < 60; i += 1) {
                 for (int j = 1; j < 60; j += 1) {

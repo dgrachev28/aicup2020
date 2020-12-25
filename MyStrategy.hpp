@@ -223,6 +223,9 @@ public:
 
     bool isFinal;
 
+    int prevEnemyResources = 0;
+    bool isEnemyRangedBaseBuilt = false;
+
     MyStrategy();
     Action getAction(PlayerView& playerView, DebugInterface* debugInterface);
     void debugUpdate(const PlayerView& playerView, DebugInterface& debugInterface);
