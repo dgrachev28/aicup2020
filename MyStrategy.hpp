@@ -171,6 +171,22 @@ struct BfsBuilding {
     int score;
 };
 
+struct PositionCount {
+    Vec2Int position;
+    int count;
+};
+
+struct Simulation {
+    std::map<int, std::unordered_set<int>> movePriorityToUnitIds;
+    std::unordered_map<int, std::vector<MoveStep>> unitMoveSteps;
+    Actions myMoves;
+//    std::array<std::array<int, 80>, 80> myMovesMap;
+
+//    std::unordered_map<int, Vec2Int> myPositions;
+
+    int score;
+};
+
 class MyStrategy {
 public:
     const PlayerView* playerView;
@@ -186,6 +202,8 @@ public:
 
     std::array<std::array<int, 80>, 80> enemyMap;
     std::array<std::array<int, 80>, 80> myMap;
+
+    std::unordered_map<int, std::vector<Vec2Int>> enemyPossibleMoves;
 
     std::map<int, std::unordered_set<int>> movePriorityToUnitIds;
     std::unordered_map<int, std::vector<MoveStep>> unitMoveSteps;
@@ -278,12 +296,31 @@ private:
 
     void battleDfs(int unitId, std::unordered_set<int>& groupedUnits, std::unordered_map<int, int>& group);
 
+    // Simulation
+
+    MicroState simulateBattle(const std::unordered_map<int, int>& group, bool defense);
+
+    void microAttack(const Entity& unit, int enemyMapDist, int priority, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
+    void microStay(const Entity& unit, int enemyMapDist, int priority, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
+    void microRunAway(const Entity& unit, int enemyMapDist, int priority, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
+
+    std::unordered_map<int, std::vector<Vec2Int>> getNextEnemyMoves();
+    int calculateSimScore(const Simulation& mySim, const Simulation& enemySim, bool& anyDeath);
+    void calculateSimulationScore(Simulation& sim);
+    void addMoveSim(int unitId, const Vec2Int& target, int score, int priority, Simulation& sim);
+
+    // End of Simulation
+
     // End of Ranged units actions
 
     void shootResources(Actions& actions);
 
     void addMove(int unitId, const Vec2Int& target, int score, int priority);
-    void handleMoves(Actions& actions);
+    void handleMoves(
+            Actions& actions,
+            std::map<int, std::unordered_set<int>>& movePriorityToUnitIds,
+            std::unordered_map<int, std::vector<MoveStep>>& unitMoveSteps
+    );
 
     // Shoot
     void handleAttackActions(Actions& actions);
