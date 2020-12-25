@@ -314,6 +314,7 @@ private:
     // End of Ranged units actions
 
     void shootResources(Actions& actions);
+    void shootResourcesAgain(Actions& actions);
 
     void addMove(int unitId, const Vec2Int& target, int score, int priority);
     void handleMoves(

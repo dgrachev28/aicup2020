@@ -277,10 +277,10 @@ std::array<std::array<int, 80>, 80> MyStrategy::dijkstra(const std::vector<Vec2I
                         len = 18;
                     }
                     if (type == RANGED_UNIT && enemyMap[edge.x][edge.y] <= 6) {
-                        len = 150;
+                        len = 200;
                     }
                     if (type == RANGED_UNIT && enemyMap[edge.x][edge.y] == 7) {
-                        len = 70;
+                        len = 200;
                     }
                     if (type == BUILDER_UNIT && world(edge).farmBuilder) {
                         len = 70;
@@ -357,11 +357,13 @@ Action MyStrategy::getAction(PlayerView& playerView, DebugInterface* debugInterf
     handleMoves(actions, movePriorityToUnitIds, unitMoveSteps);
     handleAttackActions(actions);
     handleBuilderAttackActions(actions);
+    shootResourcesAgain(actions);
     saveStepState();
 
     visionBounds.clear();
     unitMoveSteps.clear();
     movePriorityToUnitIds.clear();
+    shootResourcePositions.clear();
 
     for (const auto& [unitId, action] : actions) {
 //        if (playerView.entitiesById.at(unitId).position.x > 30
@@ -1285,8 +1287,11 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
             float myBuilderScore = customDecay(avgBuilderDist);
 
             Score score{myBuildingScore, myBuilderScore, myPowerScore, enemyPowerScore};
-            score.calcScore2();
-            potentials.push_back({score, enemy.position.x, enemy.position.y, 1});
+//            score.calcAttackScore();
+            float myDistScore = customDecay(myMap[enemy.position.x][enemy.position.y]);
+            float enemyDistScore = customDecay(enemyMap[enemy.position.x][enemy.position.y]);
+            score.score = myDistScore - enemyDistScore;
+            attackPotentials.push_back({score, enemy.position.x, enemy.position.y, 1});
         }
     }
 
@@ -1329,14 +1334,14 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
             break;
         }
     }
-//    std::cerr << "================== DEFENSE ===================" << std::endl;
-//    for (const auto& tp : topPotentials) {
-//        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
-//    }
-//    std::cerr << "================== ATTACK ====================" << std::endl;
-//    for (const auto& tp : topAttackPotentials) {
-//        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
-//    }
+    std::cerr << "================== DEFENSE ===================" << std::endl;
+    for (const auto& tp : topPotentials) {
+        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
+    }
+    std::cerr << "================== ATTACK ====================" << std::endl;
+    for (const auto& tp : topAttackPotentials) {
+        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
+    }
 }
 
 
@@ -1577,7 +1582,6 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
     for (Simulation* sim : enemySims) {
         handleMoves(sim->myMoves, sim->movePriorityToUnitIds, sim->unitMoveSteps);
     }
-    std::cerr << "==============================================" << std::endl;
     std::vector<int> scores;
     std::vector<int> anyDeaths;
     for (Simulation* mySim : mySims) {
@@ -1597,7 +1601,7 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
             score = score1;
             anyDeath = anyDeath1 || anyDeath2;
         }
-        std::cerr << "tick: " << playerView->currentTick << ", score: " << score << ", group size: " << group.size() << std::endl;
+//        std::cerr << "tick: " << playerView->currentTick << ", score: " << score << ", group size: " << group.size() << std::endl;
         scores.push_back(score);
         anyDeaths.push_back(anyDeath);
     }
@@ -1611,7 +1615,7 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
         return MicroState::RUN_AWAY;
     }
     int maxScore = *std::max_element(scores.begin(), scores.end());
-    std::cerr << "tick: " << playerView->currentTick << ", max score: " << maxScore << std::endl;
+//    std::cerr << "tick: " << playerView->currentTick << ", max score: " << maxScore << std::endl;
     if (maxScore > 0) {
         if (scores[1] == maxScore) {
             return MicroState::STAY;
@@ -1805,7 +1809,26 @@ void MyStrategy::shootResources(Actions& actions) {
             }
         }
     }
-    shootResourcePositions.clear();
+}
+
+void MyStrategy::shootResourcesAgain(Actions& actions) {
+    for (const auto& unit : playerView->getMyEntities(RANGED_UNIT)) {
+        if (!actions[unit.id].attackAction && (!actions[unit.id].moveAction || actions[unit.id].moveAction->target == unit.position)) {
+            for (const auto& pos : shootResourcePositions) {
+                if (dist(pos, unit.position) <= 5) {
+                    std::vector<MoveStep> newMoveSteps;
+                    newMoveSteps.push_back({unit.id, unit.position, 0});
+                    for (const auto& moveStep : unitMoveSteps[unit.id]) {
+                        if (moveStep.target != unit.position) {
+                            newMoveSteps.push_back(moveStep);
+                        }
+                    }
+                    unitMoveSteps[unit.id] = newMoveSteps;
+                    builderAttackActions[unit.id] = AttackAction(world(pos).getEntityId());
+                }
+            }
+        }
+    }
 }
 
 void MyStrategy::addMove(int unitId, const Vec2Int& target, int score, int priority) {
@@ -2214,7 +2237,7 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
             continue;
         }
         int maxBuildersCount = building.entityType == RANGED_BASE ? 12 : 5;
-        int maxBuildersDist = building.entityType == RANGED_BASE ? 12 : 6;
+        int maxBuildersDist = building.entityType == RANGED_BASE ? 15 : 6;
         std::vector<Vec2Int> buildingEdges = getBuildingEdges(brokenBuilding);
 
         int count = repairersCounts[brokenBuilding];
