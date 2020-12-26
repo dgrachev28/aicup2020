@@ -306,6 +306,7 @@ private:
     void microAttack(const Entity& unit, int enemyMapDist, int priority, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
     void microStay(const Entity& unit, int enemyMapDist, int priority, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
     void microRunAway(const Entity& unit, int enemyMapDist, int priority, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
+    void microShoot(const Entity& unit, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim);
 
     std::unordered_map<int, std::vector<Vec2Int>> getNextEnemyMoves();
     int calculateSimScore(const Simulation& mySim, const Simulation& enemySim, bool& anyDeath);

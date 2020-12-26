@@ -1146,9 +1146,16 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
             builderAttackActions[unit.id] = AttackAction(world(edges[0]).getEntityId());
             shootResourcePositions.push_back(edges[0]);
         }
-        for (const auto& edge : edges) {
-            addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y] * 1000 + dist2(edge, targetPosition), 10);
+        if (enemyMap[unit.position.x][unit.position.y] < 10) {
+            for (const auto& edge : edges) {
+                addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y], 10);
+            }
+        } else {
+            for (const auto& edge : edges) {
+                addMove(unit.id, edge, dijkstraResults.at(targetPosition)[edge.x][edge.y] * 1000 + dist2(edge, targetPosition), 10);
+            }
         }
+
     }
 
     for (const Entity& unit : meleeUnits) {
@@ -1581,19 +1588,25 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
     for (const auto& [unitId, distance] : group) {
         const Entity& unit = playerView->entitiesById.at(unitId);
         if (unit.playerId == playerView->myId) {
-            microAttack(unit, 6, 1, enemyMap, attackSim);
-            microAttack(unit, 7, 2, enemyMap, attackSim);
-            microStay(unit, 6, 1, enemyMap, staySim);
-            microAttack(unit, 7, 2, enemyMap, staySim);
-            microRunAway(unit, 6, 1, enemyMap, runAwaySim);
-            microStay(unit, 7, 2, enemyMap, runAwaySim);
+            microShoot(unit, enemyMap, attackSim);
+            microAttack(unit, 6, 2, enemyMap, attackSim);
+            microAttack(unit, 7, 3, enemyMap, attackSim);
+
+            microShoot(unit, enemyMap, staySim);
+            microStay(unit, 6, 2, enemyMap, staySim);
+            microAttack(unit, 7, 3, enemyMap, staySim);
+
+            microShoot(unit, enemyMap, runAwaySim);
+            microRunAway(unit, 6, 2, enemyMap, runAwaySim);
+            microStay(unit, 7, 3, enemyMap, runAwaySim);
         } else {
-            microAttack(unit, 6, 1, myMap, enemyAttackSim);
-            microAttack(unit, 7, 2, myMap, enemyAttackSim);
-            microStay(unit, 6, 1, myMap, enemyStaySim);
-            microAttack(unit, 7, 2, myMap, enemyStaySim);
-//            microRunAway(unit, 6, 1, myMap, enemyRunAwaySim);
-//            microStay(unit, 7, 2, myMap, enemyRunAwaySim);
+            microShoot(unit, myMap, enemyAttackSim);
+            microAttack(unit, 6, 2, myMap, enemyAttackSim);
+            microAttack(unit, 7, 3, myMap, enemyAttackSim);
+
+            microShoot(unit, myMap, enemyStaySim);
+            microStay(unit, 6, 2, myMap, enemyStaySim);
+            microAttack(unit, 7, 3, myMap, enemyStaySim);
         }
     }
     std::vector<Simulation*> mySims{&attackSim, &staySim, &runAwaySim};
@@ -1604,6 +1617,11 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
     for (Simulation* sim : enemySims) {
         handleMoves(sim->myMoves, sim->movePriorityToUnitIds, sim->unitMoveSteps);
     }
+//    if (playerView->currentTick == 366 && group.size() > 10) {
+//        for (const auto& [id, action] : enemyAttackSim.myMoves) {
+//            std::cerr << action.moveAction->target << std::endl;
+//        }
+//    }
     std::vector<int> scores;
     std::vector<int> anyDeaths;
     for (Simulation* mySim : mySims) {
@@ -1623,7 +1641,9 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
             score = score1;
             anyDeath = anyDeath1 || anyDeath2;
         }
-//        std::cerr << "tick: " << playerView->currentTick << ", score: " << score << ", group size: " << group.size() << std::endl;
+//        if (group.size() > 10 && playerView->currentTick == 366) {
+//            std::cerr << "tick: " << playerView->currentTick << ", score: " << score << ", group size: " << group.size() << std::endl;
+//        }
         scores.push_back(score);
         anyDeaths.push_back(anyDeath);
     }
@@ -1637,7 +1657,6 @@ MicroState MyStrategy::simulateBattle(const std::unordered_map<int, int>& group,
         return MicroState::RUN_AWAY;
     }
     int maxScore = *std::max_element(scores.begin(), scores.end());
-//    std::cerr << "tick: " << playerView->currentTick << ", max score: " << maxScore << std::endl;
     if (maxScore > 0) {
         if (scores[1] == maxScore) {
             return MicroState::STAY;
@@ -1699,6 +1718,21 @@ void MyStrategy::microRunAway(const Entity& unit, int enemyMapDist, int priority
     }
 }
 
+void MyStrategy::microShoot(const Entity& unit, const std::array<std::array<int, 80>, 80>& battleMap, Simulation& sim) {
+    if (battleMap[unit.position.x][unit.position.y] <= 5) {
+        std::vector<Vec2Int> edges = getEdges(unit.position, false);
+        std::sort(edges.begin(), edges.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
+            return battleMap[v1.x][v1.y] < battleMap[v2.x][v2.y];
+        });
+        std::reverse(edges.begin(), edges.end());
+
+        addMoveSim(unit.id, unit.position, 10, 1, sim);
+        for (const auto& edge : edges) {
+            addMoveSim(unit.id, edge, battleMap[edge.x][edge.y], 1, sim);
+        }
+    }
+}
+
 std::unordered_map<int, std::vector<Vec2Int>> MyStrategy::getNextEnemyMoves() {
     static std::unordered_set<EntityType> UNIT_TYPES = {BUILDER_UNIT, MELEE_UNIT, RANGED_UNIT};
     std::unordered_map<int, std::vector<Vec2Int>> enemyMoves;
@@ -1735,8 +1769,10 @@ int MyStrategy::calculateSimScore(const Simulation& mySim, const Simulation& ene
             }
         }
     }
-//    std::cerr << "tick: " << playerView->currentTick << ", my score: " << battleMyIds.size()
-//              << ", enemy size: " << battleEnemyIds.size() << std::endl;
+//    if (playerView->currentTick == 366) {
+//        std::cerr << "tick: " << playerView->currentTick << ", my score: " << battleMyIds.size()
+//                  << ", enemy size: " << battleEnemyIds.size() << std::endl;
+//    }
     anyDeath = battleMyIds.size() + battleEnemyIds.size() > 0;
     return battleMyIds.size() - battleEnemyIds.size();
 }
@@ -1986,34 +2022,59 @@ void MyStrategy::handleMoves(
             std::set<CollisionPriority> collisions;
             for (const auto& [pos, collision] : collisionsMap) {
                 collisions.insert(collision);
-//                if (priority < 2) {
+//                if (playerView->currentTick == 366 && priority < 3) {
 //                    std::cerr << "Tick: " << playerView->currentTick << ", collision: " << collision << std::endl;
 //                }
             }
             while (!collisions.empty()) {
-                CollisionPriority collision = CollisionPriority(*collisions.begin());
+                CollisionPriority collision;
+                collision.position = collisions.begin()->position;
+                collision.score = collisions.begin()->score;
+                for (EntityPtr u : collisions.begin()->units) {
+                    collision.units.push_back(u);
+                }
                 if (collision.units.empty()) {
                     throw std::runtime_error("Collisions are empty");
                 }
                 const Entity& unit = *collision.units[collision.units.size() - 1];
                 bool moved = false;
+
                 for (const auto& potentialMove : potentialMoves[&unit]) {
                     auto iterator = collisions.find(collisionsMap[potentialMove]);
                     if (iterator == collisions.end()) {
                         continue;
                     }
-                    moved = true;
-                    CollisionPriority collisionToChange = CollisionPriority(*iterator);
+                    CollisionPriority collisionToChange;
+                    collisionToChange.position = iterator->position;
+                    collisionToChange.score = iterator->score;
+                    for (EntityPtr u : iterator->units) {
+                        collisionToChange.units.push_back(u);
+                    }
                     collisions.erase(iterator);
                     if (collisionToChange.units.size() > 1) {
                         collisionToChange.units.erase(std::find(collisionToChange.units.begin(), collisionToChange.units.end(), &unit));
                         collisions.insert(collisionToChange);
                         collisionsMap[potentialMove] = collisionToChange;
                     }
+                    moved = true;
+                }
+                int cellValue = moveWorld[collision.position.x][collision.position.y];
+                if (cellValue != -1) {
+                    continue;
+                }
+                int currentPosMovedUnitId = moveWorld[playerView->entitiesById.at(unit.id).position.x][playerView->entitiesById.at(unit.id).position.y];
+                if (currentPosMovedUnitId >= 0 && playerView->entitiesById.at(currentPosMovedUnitId).position == collision.position) {
+                    continue;
+                }
+                if (world(collision.position).turretDanger) {
+                    continue;
                 }
                 if (moved) {
                     moveWorld[collision.position.x][collision.position.y] = unit.id;
                     actions[unit.id] = MoveAction(collision.position, false, false);
+//                    if (priority < 3) {
+//                        std::cerr << "Tick: " << playerView->currentTick << ", p: " << priority << ", pos: " << unit.position << ", target: " << collision.position << std::endl;
+//                    }
                     movedUnitIds.insert(unit.id);
                 }
             }
@@ -2040,6 +2101,9 @@ void MyStrategy::handleMoves(
                     continue;
                 }
                 moveWorld[moveStep.target.x][moveStep.target.y] = unitId;
+//                if (playerView->currentTick == 366 && priority == 3) {
+//                    std::cerr << "Tickkk: " << playerView->currentTick << ", untiId: " << unitId << ", target: " << moveStep.target << std::endl;
+//                }
                 actions[unitId] = MoveAction(moveStep.target, false, false);
                 break;
             }
