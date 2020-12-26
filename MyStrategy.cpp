@@ -785,8 +785,8 @@ PotentialBuilder MyStrategy::calcBuildingPlaceScore(int x, int y, int size, cons
     static std::unordered_set<EntityType> obstacleTypes = {HOUSE, BUILDER_BASE, RANGED_BASE, MELEE_BASE, WALL, TURRET, RESOURCE};
     const auto& startCells = getBuildingEdges({x - size, y - size}, size * 2 + 1, {MELEE_UNIT, RANGED_UNIT, BUILDER_UNIT});
     int maxUnitsCount = size == 2 ? 12 : 5;
-    int maxEmptyDistance = size == 2 ? 7 : 5;
-    int maxDistance = 10;
+    int maxEmptyDistance = size == 2 ? 15 : 5;
+    int maxDistance = 25;
 
     std::array<std::array<int, 80>, 80> d;
         for (int i = 0; i < 80; ++i) {
@@ -2303,7 +2303,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
     EntityType buildType = HOUSE;
     int buildingSize = 1;
 
-    if (playerView->getMyEntities(RANGED_BASE).empty() && myPlayer.resource >= 470) {
+    if (playerView->getMyEntities(RANGED_BASE).empty() && (myPlayer.resource >= 470 || isEnemyRangedBaseBuilt && myPlayer.resource >= 150)) {
         std::vector<Vec2Int> basePositions;
         for (int i = 2; i < 60; i += 1) {
             for (int j = 2; j < 60; j += 1) {
@@ -2353,12 +2353,19 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
                 return builder1.score < builder2.score;
             });
         } else if (buildType == RANGED_BASE) {
-//            int targetRangedPosition = isEnemyRangedBaseBuilt ? 20 : 27;
+//            int targetRangedPosition = isEnemyRangedBaseBuilt ? 20 : 30;
             int targetRangedPosition = 30;
             Vec2Int targetRangedPos{targetRangedPosition, targetRangedPosition};
-            std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
-                return builder1.score + dist(targetRangedPos, builder1.position) < builder2.score + dist(targetRangedPos, builder2.position);
-            });
+            if (isEnemyRangedBaseBuilt) {
+                std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
+                    return builder1.score * 4 + dist(targetRangedPos, builder1.position) + dist({20, 20}, builder1.position)
+                            < builder2.score * 4 + dist(targetRangedPos, builder2.position) + dist({20, 20}, builder2.position);
+                });
+            } else {
+                std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
+                    return builder1.score + dist(targetRangedPos, builder1.position) < builder2.score + dist(targetRangedPos, builder2.position);
+                });
+            }
         }
 
         PotentialBuilder bestHouseBuilder;
