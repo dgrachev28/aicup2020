@@ -2321,7 +2321,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
             }
         }
     }
-    int maxHousesCount = isFinal ? 11 : 6;
+    int maxHousesCount = isFinal ? 5 : 5;
     if (potentialBuilders.empty()) {
         int maxInactiveHousesCount = playerView->getMyEntities(RANGED_BASE).empty() ? 1 : 3;
         int housesCount = playerView->getMyEntities(HOUSE).size();
@@ -2358,8 +2358,8 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
             Vec2Int targetRangedPos{targetRangedPosition, targetRangedPosition};
             if (isEnemyRangedBaseBuilt) {
                 std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
-                    return builder1.score * 4 + dist(targetRangedPos, builder1.position) + dist({20, 20}, builder1.position)
-                            < builder2.score * 4 + dist(targetRangedPos, builder2.position) + dist({20, 20}, builder2.position);
+                    return builder1.score + dist(targetRangedPos, builder1.position) + dist({20, 20}, builder1.position)
+                            < builder2.score + dist(targetRangedPos, builder2.position) + dist({20, 20}, builder2.position);
                 });
             } else {
                 std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
