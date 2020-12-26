@@ -348,6 +348,7 @@ private:
     // End of Shoot
 
     // Builders find resources
+    void killRomka(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setRepairBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);
     void setRunningFromEnemyBuilders(std::unordered_set<int>& busyBuilders, Actions& actions);

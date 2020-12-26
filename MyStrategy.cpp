@@ -784,7 +784,7 @@ int MyStrategy::calcBlockingFarmScore(int x, int y, int size) {
 PotentialBuilder MyStrategy::calcBuildingPlaceScore(int x, int y, int size, const std::unordered_set<int>& busyBuilders) {
     static std::unordered_set<EntityType> obstacleTypes = {HOUSE, BUILDER_BASE, RANGED_BASE, MELEE_BASE, WALL, TURRET, RESOURCE};
     const auto& startCells = getBuildingEdges({x - size, y - size}, size * 2 + 1, {MELEE_UNIT, RANGED_UNIT, BUILDER_UNIT});
-    int maxUnitsCount = size == 2 ? 12 : 5;
+    int maxUnitsCount = size == 2 ? 10 : 5;
     int maxEmptyDistance = size == 2 ? 15 : 5;
     int maxDistance = 25;
 
@@ -2215,6 +2215,22 @@ std::vector<Vec2Int> MyStrategy::getBuildingEdges(int buildingId) {
     return getBuildingEdges(building.position, entitySize, {});
 }
 
+void MyStrategy::killRomka(std::unordered_set<int>& busyBuilders, Actions& actions) {
+    for (const auto& builderUnit : playerView->getMyEntities(BUILDER_UNIT)) {
+        if (busyBuilders.contains(builderUnit.id)) {
+            continue;
+        }
+        if (playerView->getMyEntities(RANGED_BASE).empty()) {
+            for (const auto& distId : myToEnemyMapping.at(builderUnit.id)) {
+                if (playerView->entitiesById.at(distId.entityId).entityType == BUILDER_UNIT && distId.distance < 15) {
+                    busyBuilders.insert(builderUnit.id);
+                    builderAttackActions[builderUnit.id] = AttackAction(AutoAttack{1000, {BUILDER_UNIT}});
+                }
+            }
+        }
+    }
+}
+
 void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Actions& actions) {
     std::unordered_set<EntityType> BUILDING_TYPES = {HOUSE, BUILDER_BASE, RANGED_BASE, MELEE_BASE, TURRET};
     static std::unordered_set<EntityType> OBSTACLE_TYPES = {HOUSE, BUILDER_BASE, RANGED_BASE, MELEE_BASE, WALL, TURRET, RESOURCE};
@@ -2264,8 +2280,8 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
         if (building.active) {
             continue;
         }
-        int maxBuildersCount = building.entityType == RANGED_BASE ? 12 : 5;
-        int maxBuildersDist = building.entityType == RANGED_BASE ? 25 : 6;
+        int maxBuildersCount = building.entityType == RANGED_BASE ? 10 : 5;
+        int maxBuildersDist = building.entityType == RANGED_BASE ? 35 : 6;
         std::vector<Vec2Int> buildingEdges = getBuildingEdges(brokenBuilding);
 
         int count = repairersCounts[brokenBuilding];
@@ -2303,7 +2319,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
     EntityType buildType = HOUSE;
     int buildingSize = 1;
 
-    if (playerView->getMyEntities(RANGED_BASE).empty() && (myPlayer.resource >= 470 || isEnemyRangedBaseBuilt && myPlayer.resource >= 150)) {
+    if (playerView->getMyEntities(RANGED_BASE).empty() && (myPlayer.resource >= 150)) {
         std::vector<Vec2Int> basePositions;
         for (int i = 2; i < 60; i += 1) {
             for (int j = 2; j < 60; j += 1) {
@@ -2356,16 +2372,16 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
 //            int targetRangedPosition = isEnemyRangedBaseBuilt ? 20 : 30;
             int targetRangedPosition = 30;
             Vec2Int targetRangedPos{targetRangedPosition, targetRangedPosition};
-            if (isEnemyRangedBaseBuilt) {
-                std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
-                    return builder1.score + dist(targetRangedPos, builder1.position) + dist({20, 20}, builder1.position)
-                            < builder2.score + dist(targetRangedPos, builder2.position) + dist({20, 20}, builder2.position);
-                });
-            } else {
+//            if (isEnemyRangedBaseBuilt) {
+//                std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
+//                    return builder1.score + dist(targetRangedPos, builder1.position) + dist({20, 20}, builder1.position)
+//                            < builder2.score + dist(targetRangedPos, builder2.position) + dist({20, 20}, builder2.position);
+//                });
+//            } else {
                 std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
                     return builder1.score + dist(targetRangedPos, builder1.position) < builder2.score + dist(targetRangedPos, builder2.position);
                 });
-            }
+//            }
         }
 
         PotentialBuilder bestHouseBuilder;
@@ -2415,8 +2431,8 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
                                                                          bestHouseBuilder.position.y - buildingSize});
             ++count;
         }
-        int maxBuildersCount = buildType == RANGED_BASE ? 12 : 5;
-        int maxBuildersDist = buildType == RANGED_BASE ? 25 : 6;
+        int maxBuildersCount = buildType == RANGED_BASE ? 10 : 5;
+        int maxBuildersDist = buildType == RANGED_BASE ? 35 : 6;
         std::vector<int> busyBuildersVec{busyBuilders.begin(), busyBuilders.end()};
 
         while (true) {
@@ -2599,6 +2615,7 @@ void MyStrategy::setMovingToFarm(std::unordered_set<int>& busyBuilders, Actions&
 
 void MyStrategy::setBuilderUnitsActions(Actions& actions) {
     std::unordered_set<int> busyBuilders;
+    killRomka(busyBuilders, actions);
     setRepairBuilders(busyBuilders, actions);
     setHouseBuilders(busyBuilders, actions);
     setRunningFromEnemyBuilders(busyBuilders, actions);
