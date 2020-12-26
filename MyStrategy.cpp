@@ -356,8 +356,9 @@ Action MyStrategy::getAction(PlayerView& playerView, DebugInterface* debugInterf
     shootResources(actions);
     handleMoves(actions, movePriorityToUnitIds, unitMoveSteps);
     handleAttackActions(actions);
-    handleBuilderAttackActions(actions);
     shootResourcesAgain(actions);
+    handleBuilderAttackActions(actions);
+
     saveStepState();
 
     visionBounds.clear();
@@ -1355,14 +1356,14 @@ void MyStrategy::findTargetEnemies(const PlayerView& playerView) {
             break;
         }
     }
-    std::cerr << "================== DEFENSE ===================" << std::endl;
-    for (const auto& tp : topPotentials) {
-        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
-    }
-    std::cerr << "================== ATTACK ====================" << std::endl;
-    for (const auto& tp : topAttackPotentials) {
-        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
-    }
+//    std::cerr << "================== DEFENSE ===================" << std::endl;
+//    for (const auto& tp : topPotentials) {
+//        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
+//    }
+//    std::cerr << "================== ATTACK ====================" << std::endl;
+//    for (const auto& tp : topAttackPotentials) {
+//        std::cerr << "tick: " << playerView.currentTick << ", score: " << tp << std::endl;
+//    }
 }
 
 
@@ -1834,17 +1835,23 @@ void MyStrategy::shootResources(Actions& actions) {
 
 void MyStrategy::shootResourcesAgain(Actions& actions) {
     for (const auto& unit : playerView->getMyEntities(RANGED_UNIT)) {
-        if (!actions[unit.id].attackAction && (!actions[unit.id].moveAction || actions[unit.id].moveAction->target == unit.position)) {
+        if (!actions[unit.id].attackAction && !builderAttackActions[unit.id].attackAction && (!actions[unit.id].moveAction || actions[unit.id].moveAction->target == unit.position)) {
             for (const auto& pos : shootResourcePositions) {
                 if (dist(pos, unit.position) <= 5) {
-                    std::vector<MoveStep> newMoveSteps;
-                    newMoveSteps.push_back({unit.id, unit.position, 0});
-                    for (const auto& moveStep : unitMoveSteps[unit.id]) {
-                        if (moveStep.target != unit.position) {
-                            newMoveSteps.push_back(moveStep);
-                        }
-                    }
-                    unitMoveSteps[unit.id] = newMoveSteps;
+                    builderAttackActions[unit.id] = AttackAction(world(pos).getEntityId());
+                }
+            }
+        }
+    }
+    for (const auto& unit : playerView->entities) {
+        if (unit.entityType == RESOURCE && enemyMap[unit.position.x][unit.position.y] >= 5 && enemyMap[unit.position.x][unit.position.y] <= 7) {
+            shootResourcePositions.push_back(unit.position);
+        }
+    }
+    for (const auto& unit : playerView->getMyEntities(RANGED_UNIT)) {
+        if (!actions[unit.id].attackAction && !builderAttackActions[unit.id].attackAction && (!actions[unit.id].moveAction || actions[unit.id].moveAction->target == unit.position)) {
+            for (const auto& pos : shootResourcePositions) {
+                if (dist(pos, unit.position) <= 5) {
                     builderAttackActions[unit.id] = AttackAction(world(pos).getEntityId());
                 }
             }
@@ -2258,7 +2265,7 @@ void MyStrategy::setRepairBuilders(std::unordered_set<int>& busyBuilders, Action
             continue;
         }
         int maxBuildersCount = building.entityType == RANGED_BASE ? 12 : 5;
-        int maxBuildersDist = building.entityType == RANGED_BASE ? 20 : 6;
+        int maxBuildersDist = building.entityType == RANGED_BASE ? 25 : 6;
         std::vector<Vec2Int> buildingEdges = getBuildingEdges(brokenBuilding);
 
         int count = repairersCounts[brokenBuilding];
@@ -2402,7 +2409,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
             ++count;
         }
         int maxBuildersCount = buildType == RANGED_BASE ? 12 : 5;
-        int maxBuildersDist = buildType == RANGED_BASE ? 12 : 6;
+        int maxBuildersDist = buildType == RANGED_BASE ? 25 : 6;
         std::vector<int> busyBuildersVec{busyBuilders.begin(), busyBuilders.end()};
 
         while (true) {
