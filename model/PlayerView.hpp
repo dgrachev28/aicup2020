@@ -39,6 +39,7 @@ public:
     int getFood() const;
 
     int getInactiveHousesCount() const;
+    int getActiveHousesCount() const;
 
     const std::vector<Entity>& getMyEntities(EntityType entityType) const;
 

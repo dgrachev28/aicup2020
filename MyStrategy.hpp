@@ -201,6 +201,7 @@ public:
 //    std::unordered_map<int, std::vector<DistId>> entitiesMapping;
 
     std::array<std::array<int, 80>, 80> enemyMap;
+    std::array<std::array<int, 80>, 80> enemyMapWithTurrets;
     std::array<std::array<int, 80>, 80> myMap;
 
     std::unordered_map<int, std::vector<Vec2Int>> enemyPossibleMoves;
@@ -250,7 +251,7 @@ public:
     std::vector<Vec2Int> bfsBuilderResources(const std::vector<Vec2Int>& startCells,
         const std::unordered_set<EntityType>& obstacleTypes,
         const std::unordered_set<Vec2Int>& obstacleCells);
-    std::array<std::array<int, 80>, 80> dijkstra(const std::vector<Vec2Int>& startCells, bool isWeighted);
+    std::array<std::array<int, 80>, 80> dijkstra(const std::vector<Vec2Int>& startCells, bool isAttack);
 
 private:
     World world_;
