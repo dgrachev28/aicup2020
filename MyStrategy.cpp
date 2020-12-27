@@ -2477,18 +2477,18 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
         });
     } else if (buildType == RANGED_BASE) {
 //            int targetRangedPosition = isEnemyRangedBaseBuilt ? 20 : 30;
-        int targetRangedPosition = 30;
+        int targetRangedPosition = 37;
         Vec2Int targetRangedPos{targetRangedPosition, targetRangedPosition};
-//            if (isEnemyRangedBaseBuilt) {
-//                std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
-//                    return builder1.score + dist(targetRangedPos, builder1.position) + dist({20, 20}, builder1.position)
-//                            < builder2.score + dist(targetRangedPos, builder2.position) + dist({20, 20}, builder2.position);
-//                });
-//            } else {
-        std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
-            return builder1.score + dist(targetRangedPos, builder1.position) < builder2.score + dist(targetRangedPos, builder2.position);
-        });
-//            }
+        if (isEnemyRangedBaseBuilt) {
+            std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
+                return builder1.score * 3 + dist(targetRangedPos, builder1.position)
+                        < builder2.score * 3 + dist(targetRangedPos, builder2.position);
+            });
+        } else {
+            std::sort(potentialBuilders.begin(), potentialBuilders.end(), [&] (const PotentialBuilder& builder1, const PotentialBuilder& builder2) {
+                return builder1.score + dist(targetRangedPos, builder1.position) < builder2.score + dist(targetRangedPos, builder2.position);
+            });
+        }
     }
 
     if (!potentialBuilders.empty()) {
