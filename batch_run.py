@@ -41,7 +41,6 @@ def worker(args):
     port3 = port2 + 1
     port4 = port3 + 1
     seed = start_seed + idx
-    print([port1, port2])
     # return
     config = {
         "game": {

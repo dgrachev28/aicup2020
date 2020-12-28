@@ -40,21 +40,25 @@ def worker(args):
     port2 = port1 + 1
     port3 = port2 + 1
     port4 = port3 + 1
-    seed = start_seed + idx
+    seed = 0
+    if start_seed is not None:
+        seed = start_seed + idx
     print([port1, port2])
     # return
     config = {
         "game": {
-            "Create": "Round2"
+            "Create": "Finals"
         },
         "players": [
             get_player_config(port1),
             get_player_config(port2),
-            get_player_config(port3),
-            get_player_config(port4)
+            # get_player_config(port3),
+            # get_player_config(port4)
         ],
-        "seed": seed
+
     }
+    if start_seed is not None:
+        config["seed"] = seed
 
     cwd = os.getcwd()
 
@@ -69,9 +73,9 @@ def worker(args):
         with subprocess.Popen(f"{lr_bin} --config {config_path} --save-results {result_path} --log-level warn".split(" ")) as process:
             time.sleep(1.0)
             subprocess.Popen([p1, "127.0.0.1", str(port1), "0000000000000000"], stdout=subprocess.DEVNULL)
-            subprocess.Popen([p2, "127.0.0.1", str(port2), "0000000000000000"], stdout=subprocess.DEVNULL)
-            subprocess.Popen([p2, "127.0.0.1", str(port3), "0000000000000000"], stdout=subprocess.DEVNULL)
-            subprocess.Popen([p2, "127.0.0.1", str(port4), "0000000000000000"], stdout=subprocess.DEVNULL)
+            subprocess.Popen([p2, "127.0.0.1", str(port2), "0000000000000000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # subprocess.Popen([p2, "127.0.0.1", str(port3), "0000000000000000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # subprocess.Popen([p2, "127.0.0.1", str(port4), "0000000000000000"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print("Waiting process...")
             process.wait()
             if os.path.exists(result_path):
@@ -96,7 +100,7 @@ def start_process():
 @click.option('--p1', type=str, required=True)
 @click.option('--p2', type=str, required=True)
 @click.option('--lr-bin', type=str, default="../aicup2020-macos/aicup2020")
-@click.option('--seed', type=int, default=1)
+@click.option('--seed', type=int)
 @click.option('--level', type=str, default="Simple")
 @click.option('--nthreads', type=int, default=4)
 @click.option('--count', type=int, default=1)

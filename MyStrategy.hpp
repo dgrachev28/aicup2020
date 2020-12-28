@@ -248,6 +248,11 @@ public:
                                 const std::unordered_set<EntityType>& obstacleTypes,
                                 const std::unordered_set<Vec2Int>& obstacleCells);
 
+    int bfsForValidateRangedBaseBuildings(const std::vector<Vec2Int>& startCells,
+                                          const std::vector<Vec2Int>& buildingEdges,
+                                          const std::unordered_set<EntityType>& obstacleTypes,
+                                          const std::unordered_set<Vec2Int>& obstacleCells);
+
     std::vector<Vec2Int> bfsBuilderResources(const std::vector<Vec2Int>& startCells,
         const std::unordered_set<EntityType>& obstacleTypes,
         const std::unordered_set<Vec2Int>& obstacleCells);

@@ -207,6 +207,45 @@ int MyStrategy::bfsForValidateBuildings(const std::vector<Vec2Int>& startCells,
     return visitedCellsCount;
 }
 
+int MyStrategy::bfsForValidateRangedBaseBuildings(const std::vector<Vec2Int>& startCells,
+                                                  const std::vector<Vec2Int>& buildingEdges,
+                                                  const std::unordered_set<EntityType>& obstacleTypes = {},
+                                                  const std::unordered_set<Vec2Int>& obstacleCells = {}) {
+    int visitedCellsCount = 0;
+    static std::unordered_set<EntityType> UNIT_TYPES = {BUILDER_UNIT, RANGED_UNIT, MELEE_UNIT};
+    std::unordered_set<Vec2Int> buildingEdgesSet{buildingEdges.begin(), buildingEdges.end()};
+    std::array<std::array<int, 80>, 80> d;
+    for (int i = 0; i < 80; ++i) {
+        for (int j = 0; j < 80; ++j) {
+            d[i][j] = 10000000;
+        }
+    }
+    std::queue<Vec2Int> q;
+    for (const Vec2Int& cell : startCells) {
+        d[cell.x][cell.y] = 0;
+        q.push(cell);
+    }
+
+    while (!q.empty()) {
+        const Vec2Int& v = q.front();
+        q.pop();
+        if ((world(v).isEmpty() || world(v).inEntityTypes(UNIT_TYPES)) && buildingEdgesSet.contains(v)) {
+            ++visitedCellsCount;
+        }
+        const std::vector<Vec2Int>& edges = edgesMap[v.x][v.y];
+        for (const Vec2Int& edge : edges) {
+            if (d[edge.x][edge.y] > d[v.x][v.y] + 1
+                && d[v.x][v.y] <= 10
+                && !world(edge).inEntityTypes(obstacleTypes)
+                && !obstacleCells.contains(v)) {
+                d[edge.x][edge.y] = d[v.x][v.y] + 1;
+                q.push(edge);
+            }
+        }
+    }
+    return visitedCellsCount;
+}
+
 
 std::vector<Vec2Int> MyStrategy::bfsBuilderResources(const std::vector<Vec2Int>& startCells,
                                                      const std::unordered_set<EntityType>& obstacleTypes = {},
@@ -960,38 +999,40 @@ void MyStrategy::getRangedUnitAction(const PlayerView& playerView, Actions& acti
     const auto& rangedUnits = playerView.getMyEntities(RANGED_UNIT);
     std::unordered_map<int, Vec2Int> defenderScouts;
     if (playerView.fogOfWar) {
-        std::sort(visionBounds.begin(), visionBounds.end(), [&](const Vec2Int& v1, const Vec2Int& v2) {
-            return world(v1).myBuildersBfs < world(v2).myBuildersBfs;
-        });
-        for (const auto& visionBound : visionBounds) {
-            if (visionBound.x + visionBound.y < 20) {
-                continue;
-            }
-            bool isTooClose = false;
-            for (const auto& [unitId, position] : defenderScouts) {
-                if (dist(position, visionBound) < 20) {
-                    isTooClose = true;
-                    break;
+        if (playerView.currentTick > 300) {
+            std::sort(visionBounds.begin(), visionBounds.end(), [&](const Vec2Int &v1, const Vec2Int &v2) {
+                return world(v1).myBuildersBfs < world(v2).myBuildersBfs;
+            });
+            for (const auto &visionBound : visionBounds) {
+                if (visionBound.x + visionBound.y < 20) {
+                    continue;
                 }
-            }
-            if (!isTooClose) {
-                int minDist = 10000;
-                int closestUnitId = -1;
-                for (const auto& unit : playerView.getMyEntities(RANGED_UNIT)) {
-                    int distance = dist(unit.position, visionBound);
-                    if (!defenderScouts.contains(unit.id) && distance < minDist) {
-                        minDist = distance;
-                        closestUnitId = unit.id;
+                bool isTooClose = false;
+                for (const auto&[unitId, position] : defenderScouts) {
+                    if (dist(position, visionBound) < 20) {
+                        isTooClose = true;
+                        break;
                     }
                 }
-                if (closestUnitId != -1) {
+                if (!isTooClose) {
+                    int minDist = 10000;
+                    int closestUnitId = -1;
+                    for (const auto &unit : playerView.getMyEntities(RANGED_UNIT)) {
+                        int distance = dist(unit.position, visionBound);
+                        if (!defenderScouts.contains(unit.id) && distance < minDist) {
+                            minDist = distance;
+                            closestUnitId = unit.id;
+                        }
+                    }
+                    if (closestUnitId != -1) {
 //                    std::cerr << "tick: " << playerView.currentTick << ", unitId: " << closestUnitId
 //                              << ", postion: " << visionBound << ", ranged dist: " << minDist
 //                              << ", builder dist: " << world(visionBound).myBuildersBfs << std::endl;
-                    defenderScouts[closestUnitId] = visionBound;
-                }
-                if (defenderScouts.size() >= 3 || world(visionBound).myBuildersBfs > 20) {
-                    break;
+                        defenderScouts[closestUnitId] = visionBound;
+                    }
+                    if (defenderScouts.size() >= 3 || world(visionBound).myBuildersBfs > 20) {
+                        break;
+                    }
                 }
             }
         }
@@ -2428,7 +2469,7 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
     bool shouldBuildRanged = playerView->getMyEntities(RANGED_BASE).empty()
             && (housesCount >= maxHousesCount || isEnemyRangedBaseBuilt || myPlayer.resource > 1000);
 
-    if (shouldBuildRanged && myPlayer.resource > 150) {
+    if (shouldBuildRanged) {
         std::vector<Vec2Int> basePositions;
         for (int i = 2; i < 60; i += 1) {
             for (int j = 2; j < 60; j += 1) {
@@ -2505,19 +2546,29 @@ void MyStrategy::setHouseBuilders(std::unordered_set<int>& busyBuilders, Actions
                 }
             }
             const Vec2Int& startPos = playerView->entitiesById.at(potentialBuilder.unitId).position;
-            int buildingEmptiness = bfsForValidateBuildings({startPos}, OBSTACLE_TYPES, blockedCells);
-            int withoutBuildingEmptiness = bfsForValidateBuildings({startPos}, OBSTACLE_TYPES);
-//            if (counter < 3) {
-//                std::cerr << "tick: " << playerView->currentTick << ", pos: " << potentialBuilder.position
-//                          << ", val: " << withoutBuildingEmptiness - buildingEmptiness - buildingSquare << std::endl;
-//            }
-            bool nearBase = potentialBuilder.position.x <= 11 && potentialBuilder.position.y <= 11
-                    && potentialBuilder.position.x >= 3 && potentialBuilder.position.y >= 3;
-            if (nearBase || withoutBuildingEmptiness - buildingEmptiness - buildingSquare < 10) {
-                bestHouseBuilder = potentialBuilder;
-                isBestHouseBuilderChoosen = true;
-                break;
+            if (buildType == HOUSE) {
+
+                int buildingEmptiness = bfsForValidateBuildings({startPos}, OBSTACLE_TYPES, blockedCells);
+                int withoutBuildingEmptiness = bfsForValidateBuildings({startPos}, OBSTACLE_TYPES);
+                bool nearBase = potentialBuilder.position.x <= 11 && potentialBuilder.position.y <= 11
+                                && potentialBuilder.position.x >= 3 && potentialBuilder.position.y >= 3;
+                if (nearBase || withoutBuildingEmptiness - buildingEmptiness - buildingSquare < 10) {
+                    bestHouseBuilder = potentialBuilder;
+                    isBestHouseBuilderChoosen = true;
+                    break;
+                }
+            } else {
+                const auto& buildingEdges = getBuildingEdges({potentialBuilder.position.x - buildingSize, potentialBuilder.position.y - buildingSize},
+                                                             buildingSize * 2 + 1, {BUILDER_UNIT});
+                int placesScore = bfsForValidateRangedBaseBuildings({startPos}, buildingEdges, OBSTACLE_TYPES, blockedCells);
+                if (placesScore > 8) {
+                    std::cerr << placesScore << std::endl;
+                    bestHouseBuilder = potentialBuilder;
+                    isBestHouseBuilderChoosen = true;
+                    break;
+                }
             }
+
             if (++counter > 10) {
                 break;
             }
